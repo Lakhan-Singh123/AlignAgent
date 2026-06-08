@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# Environment — never commit secrets
+.env
+.env.*
+
+# Pytest
+.pytest_cache/
+
+# Vector indexes — large binary files, rebuilt by running ingest
+workspaces/
+
+# Generated reports — user-specific output
+reports/
+
+# User progress tracker — personal data
+progress.json
+
+# macOS
+.DS_Store
+
+# IDEs
+.vscode/
+.idea/
+
+# Claude Code
+.claude/

@@ -1,0 +1,13 @@
+Internship: Junior AI Engineering Intern
+
+The intern will help build AI-powered document analysis tools for resume
+screening, internship matching, and skill-gap detection. Responsibilities
+include writing Python services, integrating APIs, parsing documents, building
+retrieval-augmented generation workflows, and maintaining clean Git workflows.
+
+Required skills include Python, SQL, REST APIs, basic machine learning,
+LangChain or similar LLM tooling, vector databases, and clear technical
+communication.
+
+Preferred skills include Docker, CI/CD, cloud deployment, scalable database
+design, evaluation of LLM outputs, and production monitoring.

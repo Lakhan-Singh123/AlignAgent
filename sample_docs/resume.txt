@@ -1,0 +1,14 @@
+Candidate: Demo Student
+
+The candidate has experience with Python, SQL, machine learning, data analysis,
+Flask, Git, and basic cloud deployment. They built academic and personal
+projects involving resume screening, internship matching, web dashboards, and
+document parsing.
+
+They are comfortable with Pandas, NumPy, REST APIs, HTML, CSS, and basic
+JavaScript. They have beginner-level exposure to LangChain, embeddings, vector
+databases, and retrieval-augmented generation.
+
+They are looking for internships in AI engineering, backend development, and
+data analytics. Their current gaps include production MLOps, advanced system
+design, Docker, CI/CD pipelines, and deep experience with scalable databases.

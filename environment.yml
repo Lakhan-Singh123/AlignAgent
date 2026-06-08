@@ -1,0 +1,17 @@
+name: alignagent
+channels:
+  - defaults
+dependencies:
+  - python=3.11
+  - pip
+  - pip:
+      - faiss-cpu
+      - langchain
+      - langchain-core
+      - langchain-community
+      - langchain-google-genai
+      - langchain-text-splitters
+      - pypdf
+      - docx2txt
+      - python-dotenv
+      - pytest
