@@ -1,5 +1,6 @@
 import json
 import streamlit as st
+import plotly.graph_objects as go
 
 from analyzer import (
     extract_text_from_pdf,
@@ -29,132 +30,241 @@ st.set_page_config(
 # ── CSS ───────────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-  .stApp { background:#0D1117; color:#E6EDF3;
-           font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; }
-  .main .block-container { background:#0D1117; padding-top:1.5rem; max-width:1120px; }
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+  /* ── Base ── */
+  .stApp { background:#080C14; color:#E2E8F0;
+           font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; }
+  .main .block-container { background:#080C14; padding-top:1.5rem; max-width:1140px; }
   #MainMenu,footer,header { visibility:hidden; }
 
-  /* Sidebar */
-  [data-testid="stSidebar"] { background:#0D1117 !important; border-right:1px solid #21262D; }
-  [data-testid="stSidebar"] * { color:#E6EDF3 !important; }
-
-  /* Inputs */
-  textarea,input[type="text"] {
-    background:#161B22 !important; color:#E6EDF3 !important;
-    border:1px solid #30363D !important; border-radius:8px !important;
+  /* ── Sidebar ── */
+  [data-testid="stSidebar"] {
+    background:linear-gradient(180deg,#0D1220 0%,#080C14 100%) !important;
+    border-right:1px solid #1E2A3A !important;
   }
-  textarea::placeholder,input::placeholder { color:#6E7681 !important; }
-  .stFileUploader section { background:#161B22 !important; border-radius:10px !important;
-                             border:1.5px dashed #30363D !important; }
-  .stFileUploader section small { color:#8B949E !important; }
+  [data-testid="stSidebar"] * { color:#C9D1D9 !important; }
 
-  /* Buttons */
+  /* ── Inputs ── */
+  textarea, input[type="text"] {
+    background:#0D1220 !important; color:#E2E8F0 !important;
+    border:1px solid #1E2A3A !important; border-radius:10px !important;
+    transition:border-color .2s !important;
+  }
+  textarea:focus, input[type="text"]:focus {
+    border-color:#4F8EF7 !important; box-shadow:0 0 0 3px #4F8EF720 !important;
+  }
+  textarea::placeholder, input::placeholder { color:#6B7A8D !important; }
+
+  .stFileUploader section {
+    background:linear-gradient(135deg,#0D1220,#111827) !important;
+    border-radius:12px !important; border:1.5px dashed #2D3748 !important;
+    transition:border-color .2s !important;
+  }
+  .stFileUploader section:hover { border-color:#4F8EF7 !important; }
+  .stFileUploader section small { color:#8899AA !important; }
+
+  /* ── Buttons ── */
   .stButton>button {
-    background:#1F6FEB !important; color:#fff !important;
-    border:none !important; border-radius:8px !important;
-    font-weight:600 !important; padding:0.55rem 1.6rem !important;
-    transition:background .15s !important;
+    background:linear-gradient(135deg,#2563EB,#4F8EF7) !important;
+    color:#fff !important; border:none !important; border-radius:10px !important;
+    font-weight:600 !important; padding:0.6rem 1.8rem !important;
+    box-shadow:0 4px 15px #2563EB33 !important;
+    transition:all .2s !important; letter-spacing:.01em !important;
   }
-  .stButton>button:hover { background:#388BFD !important; }
+  .stButton>button:hover {
+    background:linear-gradient(135deg,#3B82F6,#60A5FA) !important;
+    box-shadow:0 6px 20px #3B82F640 !important;
+    transform:translateY(-1px) !important;
+  }
 
-  /* Tabs */
+  /* ── Tabs ── */
   .stTabs [data-baseweb="tab-list"] {
-    background:#161B22; border-radius:10px; padding:4px;
-    gap:4px; border:1px solid #30363D;
+    background:#0D1220; border-radius:12px; padding:5px;
+    gap:4px; border:1px solid #1E2A3A;
   }
   .stTabs [data-baseweb="tab"] {
-    background:transparent; color:#8B949E; border-radius:8px;
-    font-weight:500; font-size:.875rem; padding:.4rem .9rem; border:none;
+    background:transparent; color:#8899AA; border-radius:9px;
+    font-weight:500; font-size:.875rem; padding:.45rem 1rem; border:none;
+    transition:all .15s;
   }
-  .stTabs [aria-selected="true"] { background:#21262D !important; color:#E6EDF3 !important; }
-  .stTabs [data-baseweb="tab-panel"] { padding-top:1.2rem; }
+  .stTabs [aria-selected="true"] {
+    background:linear-gradient(135deg,#1E293B,#162032) !important;
+    color:#93C5FD !important; box-shadow:0 2px 8px #00000040 !important;
+  }
+  .stTabs [data-baseweb="tab-panel"] { padding-top:1.4rem; }
 
-  /* Progress bar */
-  .stProgress>div>div { background:#1F6FEB !important; border-radius:999px !important; }
-  .stProgress>div     { background:#21262D !important; border-radius:999px !important; height:8px !important; }
+  /* ── Progress bar ── */
+  .stProgress>div>div {
+    background:linear-gradient(90deg,#2563EB,#7C3AED) !important;
+    border-radius:999px !important;
+  }
+  .stProgress>div { background:#1E2A3A !important; border-radius:999px !important; height:8px !important; }
 
-  /* Checkbox */
-  .stCheckbox label { color:#E6EDF3 !important; }
+  /* ── Checkbox ── */
+  .stCheckbox label { color:#C9D1D9 !important; }
 
-  /* Alerts */
-  [data-testid="stAlert"] { border-radius:10px !important; }
+  /* ── Alerts ── */
+  [data-testid="stAlert"] { border-radius:12px !important; }
 
-  /* Custom components */
-  .hero { padding:1.2rem 0 1.8rem; border-bottom:1px solid #21262D; margin-bottom:1.8rem; }
+  /* ── Hero ── */
+  .hero {
+    padding:1.4rem 0 2rem; border-bottom:1px solid #1E2A3A; margin-bottom:2rem;
+    background:linear-gradient(135deg,#080C14 60%,#0D1A2E 100%);
+  }
   .hero-badge {
-    display:inline-block; background:#162032; color:#58A6FF;
-    font-size:.7rem; font-weight:700; letter-spacing:1px; text-transform:uppercase;
-    padding:3px 10px; border-radius:999px; border:1px solid #1F6FEB44; margin-bottom:.6rem;
+    display:inline-block;
+    background:linear-gradient(135deg,#0F1E3A,#162032);
+    color:#60A5FA; font-size:.68rem; font-weight:700; letter-spacing:1.5px;
+    text-transform:uppercase; padding:4px 12px; border-radius:999px;
+    border:1px solid #2563EB55; margin-bottom:.7rem;
+    box-shadow:0 0 12px #2563EB22;
   }
-  .hero h1 { font-size:1.9rem; font-weight:700; color:#E6EDF3; margin:0 0 .3rem; letter-spacing:-.5px; }
-  .hero p  { color:#8B949E; margin:0; font-size:.95rem; }
+  .hero h1 {
+    font-size:2.1rem; font-weight:700; margin:0 0 .4rem; letter-spacing:-.6px;
+    background:linear-gradient(135deg,#E2E8F0 30%,#93C5FD 100%);
+    -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+  }
+  .hero p { color:#94A3B8; margin:0; font-size:.95rem; }
 
-  .input-label { font-size:.78rem; font-weight:700; letter-spacing:.5px;
-                 text-transform:uppercase; color:#8B949E; margin-bottom:.35rem; }
+  /* ── Input labels ── */
+  .input-label {
+    font-size:.72rem; font-weight:700; letter-spacing:.8px;
+    text-transform:uppercase; color:#4F8EF7; margin-bottom:.4rem;
+  }
 
+  /* ── Score cards ── */
   .score-card {
-    background:#161B22; border:1px solid #30363D; border-radius:14px;
-    padding:1.5rem; text-align:center; margin-bottom:.75rem;
+    background:linear-gradient(145deg,#0D1220,#111827);
+    border:1px solid #1E2A3A; border-radius:16px;
+    padding:1.6rem 1rem; text-align:center; margin-bottom:.75rem;
+    box-shadow:0 4px 24px #00000040;
+    transition:transform .2s, box-shadow .2s;
   }
-  .score-label { font-size:.72rem; font-weight:700; letter-spacing:.6px;
-                 text-transform:uppercase; color:#8B949E; }
-  .score-number { font-size:3rem; font-weight:700; line-height:1.1; }
-  .score-sub { font-size:.82rem; font-weight:500; margin-top:.2rem; }
-  .green  { color:#3FB950; } .yellow { color:#D29922; }
-  .red    { color:#F85149; } .purple { color:#BC8CFF; }
+  .score-card:hover { transform:translateY(-2px); box-shadow:0 8px 32px #00000055; }
+  .score-label {
+    font-size:.68rem; font-weight:700; letter-spacing:.8px;
+    text-transform:uppercase; color:#8899AA; margin-bottom:.3rem;
+  }
+  .score-number { font-size:3.2rem; font-weight:700; line-height:1.1; }
+  .score-sub { font-size:.8rem; font-weight:500; margin-top:.25rem; }
 
-  .tag-wrap { display:flex; flex-wrap:wrap; gap:7px; margin-top:.5rem; }
-  .tag { display:inline-block; padding:5px 13px; border-radius:999px; font-size:.8rem; font-weight:500; }
-  .tag-green { background:#0F2A1A; color:#3FB950; border:1px solid #238636; }
-  .tag-red   { background:#2A0F0F; color:#F85149; border:1px solid #6E2424; }
+  .green  { color:#34D399; }
+  .yellow { color:#FBBF24; }
+  .red    { color:#F87171; }
+  .purple { color:#A78BFA; }
 
-  .section-title { font-size:.72rem; font-weight:700; letter-spacing:.6px; text-transform:uppercase;
-                   color:#8B949E; margin:1.2rem 0 .6rem; padding-bottom:.4rem;
-                   border-bottom:1px solid #21262D; }
+  /* ── Skill tags ── */
+  .tag-wrap { display:flex; flex-wrap:wrap; gap:8px; margin-top:.6rem; }
+  .tag { display:inline-block; padding:5px 14px; border-radius:999px; font-size:.79rem; font-weight:600; }
+  .tag-green {
+    background:linear-gradient(135deg,#052E16,#064E3B);
+    color:#6EE7B7; border:1px solid #059669;
+    box-shadow:0 0 8px #05966922;
+  }
+  .tag-red {
+    background:linear-gradient(135deg,#2D0A0A,#450A0A);
+    color:#FCA5A5; border:1px solid #DC2626;
+    box-shadow:0 0 8px #DC262622;
+  }
 
-  .timeline-item { display:flex; gap:1rem; padding:1rem 0; border-bottom:1px solid #21262D; }
-  .week-dot { flex-shrink:0; width:36px; height:36px; border-radius:50%; background:#162032;
-              border:1.5px solid #1F6FEB44; color:#58A6FF; font-weight:700; font-size:.72rem;
-              display:flex; align-items:center; justify-content:center; margin-top:2px; }
-  .week-content h4 { margin:0 0 .15rem; font-size:.92rem; font-weight:600; color:#E6EDF3; }
-  .week-content .goal { margin:0; font-size:.82rem; color:#8B949E; }
+  /* ── Section titles ── */
+  .section-title {
+    font-size:.68rem; font-weight:700; letter-spacing:.8px; text-transform:uppercase;
+    color:#4F8EF7; margin:1.3rem 0 .7rem; padding-bottom:.4rem;
+    border-bottom:1px solid #1E2A3A;
+  }
+
+  /* ── Timeline ── */
+  .timeline-item {
+    display:flex; gap:1rem; padding:1.1rem 0; border-bottom:1px solid #1E2A3A;
+    transition:background .15s;
+  }
+  .week-dot {
+    flex-shrink:0; width:38px; height:38px; border-radius:50%;
+    background:linear-gradient(135deg,#1E3A5F,#162032);
+    border:1.5px solid #3B82F660; color:#60A5FA; font-weight:700; font-size:.7rem;
+    display:flex; align-items:center; justify-content:center; margin-top:2px;
+    box-shadow:0 0 10px #3B82F625;
+  }
+  .week-content h4 { margin:0 0 .15rem; font-size:.93rem; font-weight:600; color:#E2E8F0; }
+  .week-content .goal { margin:0; font-size:.82rem; color:#94A3B8; }
   .task-list { margin:.4rem 0 0; padding-left:1.1rem; }
-  .task-list li { font-size:.82rem; color:#8B949E; margin-bottom:3px; }
-  .project-chip { display:inline-block; margin-top:.5rem; background:#0F2A1A; color:#3FB950;
-                  border:1px solid #238636; border-radius:6px; padding:3px 9px; font-size:.76rem; }
+  .task-list li { font-size:.82rem; color:#94A3B8; margin-bottom:3px; }
+  .project-chip {
+    display:inline-block; margin-top:.5rem;
+    background:linear-gradient(135deg,#052E16,#064E3B);
+    color:#6EE7B7; border:1px solid #059669;
+    border-radius:6px; padding:3px 10px; font-size:.75rem; font-weight:600;
+  }
 
-  .resource-card { background:#161B22; border:1px solid #30363D; border-radius:10px;
-                   padding:.75rem 1rem; margin-bottom:.4rem; display:flex;
-                   align-items:center; gap:.75rem; transition:border-color .15s; }
-  .resource-card:hover { border-color:#58A6FF; }
-  .resource-type { flex-shrink:0; font-size:.62rem; font-weight:700; text-transform:uppercase;
-                   letter-spacing:.5px; padding:3px 7px; border-radius:5px;
-                   background:#21262D; color:#8B949E; }
-  .resource-title { font-size:.87rem; font-weight:500; color:#E6EDF3; }
-  .resource-title a { color:#58A6FF; text-decoration:none; }
-  .resource-title a:hover { text-decoration:underline; }
+  /* ── Resource cards ── */
+  .resource-card {
+    background:linear-gradient(135deg,#0D1220,#111827);
+    border:1px solid #1E2A3A; border-radius:12px;
+    padding:.8rem 1rem; margin-bottom:.5rem; display:flex;
+    align-items:center; gap:.8rem; transition:all .2s;
+  }
+  .resource-card:hover { border-color:#3B82F6; box-shadow:0 4px 16px #3B82F620; transform:translateX(3px); }
+  .resource-type {
+    flex-shrink:0; font-size:.6rem; font-weight:700; text-transform:uppercase;
+    letter-spacing:.6px; padding:3px 8px; border-radius:6px;
+    background:#1E2A3A; color:#60A5FA; border:1px solid #2D3F55;
+  }
+  .resource-title { font-size:.87rem; font-weight:500; color:#C9D1D9; }
+  .resource-title a { color:#60A5FA; text-decoration:none; transition:color .15s; }
+  .resource-title a:hover { color:#93C5FD; text-decoration:underline; }
 
-  .interview-q { background:#161B22; border:1px solid #30363D; border-radius:10px;
-                 padding:.85rem 1rem; margin-bottom:.4rem; font-size:.88rem; color:#E6EDF3; }
-  .interview-q strong { color:#58A6FF; }
+  /* ── Interview questions ── */
+  .interview-q {
+    background:linear-gradient(135deg,#0D1220,#0F1A2E);
+    border:1px solid #1E2A3A; border-left:3px solid #3B82F6;
+    border-radius:0 12px 12px 0; padding:.9rem 1.1rem; margin-bottom:.5rem;
+    font-size:.88rem; color:#C9D1D9; transition:border-color .15s;
+  }
+  .interview-q:hover { border-left-color:#60A5FA; }
+  .interview-q strong { color:#60A5FA; }
 
-  .tip-card { background:#1A1208; border-left:3px solid #D29922; border-radius:0 8px 8px 0;
-              padding:.7rem 1rem; margin-bottom:.4rem; font-size:.87rem; color:#E6EDF3; }
+  /* ── Resume tips ── */
+  .tip-card {
+    background:linear-gradient(135deg,#1C1205,#1A1208);
+    border-left:3px solid #FBBF24; border-radius:0 10px 10px 0;
+    padding:.75rem 1rem; margin-bottom:.5rem; font-size:.87rem; color:#E2E8F0;
+    transition:border-color .15s;
+  }
+  .tip-card:hover { border-left-color:#F59E0B; }
 
-  .compare-card { background:#161B22; border:1px solid #30363D; border-radius:12px;
-                  padding:1.2rem; text-align:center; }
-  .compare-score { font-size:2.4rem; font-weight:700; }
-  .compare-title { font-size:.82rem; color:#8B949E; font-weight:500; margin-bottom:.5rem; }
+  /* ── Compare cards ── */
+  .compare-card {
+    background:linear-gradient(145deg,#0D1220,#111827);
+    border:1px solid #1E2A3A; border-radius:14px;
+    padding:1.3rem; text-align:center;
+    box-shadow:0 4px 20px #00000040;
+    transition:transform .2s, box-shadow .2s;
+  }
+  .compare-card:hover { transform:translateY(-2px); box-shadow:0 8px 30px #00000055; }
+  .compare-score { font-size:2.6rem; font-weight:700; }
+  .compare-title { font-size:.82rem; color:#8899AA; font-weight:500; margin-bottom:.5rem; }
 
-  .divider { border:none; border-top:1px solid #21262D; margin:1.5rem 0; }
-  .empty-state { text-align:center; padding:3.5rem 0; color:#6E7681; }
-  .empty-state .icon { font-size:2.5rem; margin-bottom:.6rem; }
-  .empty-state h3 { color:#8B949E; font-size:.95rem; font-weight:600; margin:0 0 .25rem; }
+  /* ── Utility ── */
+  .divider { border:none; border-top:1px solid #1E2A3A; margin:1.5rem 0; }
+
+  .empty-state { text-align:center; padding:4rem 0; color:#8899AA; }
+  .empty-state .icon { font-size:2.8rem; margin-bottom:.7rem; }
+  .empty-state h3 { color:#94A3B8; font-size:.95rem; font-weight:600; margin:0 0 .3rem; }
   .empty-state p  { font-size:.83rem; margin:0; }
 
-  .node-step { background:#161B22; border:1px solid #30363D; border-radius:8px;
-               padding:.5rem .9rem; margin-bottom:.3rem; font-size:.85rem; color:#8B949E; }
-  .node-step.done { border-color:#238636; color:#3FB950; }
+  /* ── Agent progress nodes ── */
+  .node-step {
+    background:#0D1220; border:1px solid #1E2A3A; border-radius:10px;
+    padding:.55rem 1rem; margin-bottom:.35rem; font-size:.84rem; color:#8899AA;
+    transition:all .3s;
+  }
+  .node-step.done {
+    background:linear-gradient(135deg,#052E16,#064E3B);
+    border-color:#059669; color:#6EE7B7;
+    box-shadow:0 0 10px #05966922;
+  }
 </style>
 """, unsafe_allow_html=True)
 
@@ -162,7 +272,7 @@ st.markdown("""
 # ── Sidebar: Progress Tracker ─────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("### 🎯 AlignAgent")
-    st.markdown("<hr style='border-color:#21262D;margin:.5rem 0 1rem'>", unsafe_allow_html=True)
+    st.markdown("<hr style='border-color:#1E2A3A;margin:.5rem 0 1rem'>", unsafe_allow_html=True)
     st.markdown("#### 📊 Skill Progress Tracker")
     st.caption("Check off skills you've learned — your score updates automatically.")
 
@@ -179,7 +289,7 @@ with st.sidebar:
     else:
         st.caption("Run an analysis to populate your tracker.")
 
-    st.markdown("<hr style='border-color:#21262D;margin:1rem 0'>", unsafe_allow_html=True)
+    st.markdown("<hr style='border-color:#1E2A3A;margin:1rem 0'>", unsafe_allow_html=True)
     st.markdown("#### ℹ️ About")
     st.caption("Powered by **Ollama** (local, free). No data leaves your machine.")
 
@@ -187,7 +297,7 @@ with st.sidebar:
 # ── Hero ──────────────────────────────────────────────────────────────────────
 st.markdown("""
 <div class="hero">
-  <div class="hero-badge">Local · Free · Agentic RAG</div>
+  <div class="hero-badge">⚡ Local · Free · Agentic RAG</div>
   <h1>AlignAgent</h1>
   <p>Upload your resume and a job description — get a full skill gap report, week-by-week plan, interview prep, and resume suggestions.</p>
 </div>
@@ -341,7 +451,7 @@ with mode_tab:
                 <div class="score-card">
                   <div class="score-label">Weeks Remaining</div>
                   <div class="score-number purple">{remaining_weeks}</div>
-                  <div class="score-sub" style="color:#8B949E;">of {timeline} week plan</div>
+                  <div class="score-sub" style="color:#94A3B8;">of {timeline} week plan</div>
                 </div>""", unsafe_allow_html=True)
 
         with ec:
@@ -351,8 +461,106 @@ with mode_tab:
             <div class="score-card">
               <div class="score-label">Skills Learned</div>
               <div class="score-number" style="color:#58A6FF;">{skills_learned}/{len(missing)}</div>
-              <div class="score-sub" style="color:#8B949E;">{pct}% of gaps closed</div>
+              <div class="score-sub" style="color:#94A3B8;">{pct}% of gaps closed</div>
             </div>""", unsafe_allow_html=True)
+
+        # ── Charts row ───────────────────────────────────────────────────────
+        ch1, ch2, ch3 = st.columns([1.1, 1, 1.4], gap="large")
+
+        with ch1:
+            # Gauge — readiness score
+            gauge_color = "#34D399" if adj_score >= 70 else ("#FBBF24" if adj_score >= 40 else "#F87171")
+            fig_gauge = go.Figure(go.Indicator(
+                mode="gauge+number",
+                value=adj_score,
+                number={"suffix": "%", "font": {"size": 36, "color": "#E2E8F0"}},
+                gauge={
+                    "axis": {"range": [0, 100], "tickcolor": "#8899AA",
+                             "tickfont": {"color": "#8899AA", "size": 10}},
+                    "bar": {"color": gauge_color, "thickness": 0.28},
+                    "bgcolor": "#0D1220",
+                    "borderwidth": 0,
+                    "steps": [
+                        {"range": [0,  40], "color": "#2D0A0A"},
+                        {"range": [40, 70], "color": "#1C1205"},
+                        {"range": [70, 100], "color": "#052E16"},
+                    ],
+                    "threshold": {
+                        "line": {"color": gauge_color, "width": 3},
+                        "thickness": 0.82,
+                        "value": adj_score,
+                    },
+                },
+            ))
+            fig_gauge.update_layout(
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                font={"color": "#E2E8F0"}, height=210,
+                margin=dict(l=20, r=20, t=30, b=10),
+                title={"text": "Readiness Gauge", "font": {"size": 11, "color": "#8899AA"},
+                       "x": 0.5, "xanchor": "center"},
+            )
+            st.plotly_chart(fig_gauge, use_container_width=True, config={"displayModeBar": False})
+
+        with ch2:
+            # Donut — matched vs missing
+            donut_labels = ["Skills Matched", "Skills Missing"]
+            donut_values = [max(len(matched), 1), max(len(missing), 0)]
+            fig_donut = go.Figure(go.Pie(
+                labels=donut_labels,
+                values=donut_values,
+                hole=0.68,
+                marker=dict(colors=["#059669", "#DC2626"],
+                            line=dict(color="#080C14", width=3)),
+                textfont={"color": "#E2E8F0", "size": 11},
+                hovertemplate="%{label}: %{value}<extra></extra>",
+            ))
+            fig_donut.add_annotation(
+                text=f"<b>{len(matched)}/{len(matched)+len(missing)}</b>",
+                x=0.5, y=0.5, font_size=20, font_color="#E2E8F0", showarrow=False,
+            )
+            fig_donut.update_layout(
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                font={"color": "#C9D1D9"}, height=210,
+                showlegend=True,
+                legend=dict(font=dict(color="#C9D1D9", size=10),
+                            bgcolor="rgba(0,0,0,0)", orientation="h",
+                            x=0.5, xanchor="center", y=-0.05),
+                margin=dict(l=10, r=10, t=30, b=10),
+                title={"text": "Skills Breakdown", "font": {"size": 11, "color": "#8899AA"},
+                       "x": 0.5, "xanchor": "center"},
+            )
+            st.plotly_chart(fig_donut, use_container_width=True, config={"displayModeBar": False})
+
+        with ch3:
+            # Horizontal bar — all skills (green = have, red = missing)
+            all_skills  = matched + [s for s in missing if s not in learned]
+            bar_colors  = (["#059669"] * len(matched) +
+                           ["#DC2626"] * len([s for s in missing if s not in learned]))
+            bar_labels  = (["✓ " + s for s in matched] +
+                           ["✗ " + s for s in missing if s not in learned])
+            if all_skills:
+                fig_bar = go.Figure(go.Bar(
+                    y=bar_labels,
+                    x=[1] * len(bar_labels),
+                    orientation="h",
+                    marker=dict(color=bar_colors, line=dict(width=0)),
+                    text=bar_labels,
+                    textposition="inside",
+                    textfont={"color": "#E2E8F0", "size": 10},
+                    hoverinfo="skip",
+                ))
+                fig_bar.update_layout(
+                    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                    font={"color": "#C9D1D9"},
+                    height=max(180, len(bar_labels) * 26 + 50),
+                    xaxis=dict(visible=False, range=[0, 1.05]),
+                    yaxis=dict(visible=False),
+                    margin=dict(l=5, r=5, t=30, b=10),
+                    bargap=0.25,
+                    title={"text": "Skill Map", "font": {"size": 11, "color": "#8899AA"},
+                           "x": 0.5, "xanchor": "center"},
+                )
+                st.plotly_chart(fig_bar, use_container_width=True, config={"displayModeBar": False})
 
         # ── Skill tags ────────────────────────────────────────────────────────
         sk1, sk2 = st.columns(2, gap="large")
@@ -360,7 +568,7 @@ with mode_tab:
             st.markdown('<div class="section-title">Skills you have</div>', unsafe_allow_html=True)
             tags = "".join(f'<span class="tag tag-green">{s}</span>'
                            for s in matched + [s for s in missing if s in learned])
-            st.markdown(f'<div class="tag-wrap">{tags or "<em style=color:#6E7681>None detected</em>"}</div>',
+            st.markdown(f'<div class="tag-wrap">{tags or "<em style=color:#94A3B8>None detected</em>"}</div>',
                         unsafe_allow_html=True)
 
         with sk2:
@@ -383,6 +591,50 @@ with mode_tab:
 
         with t1:
             if plan:
+                # Gantt chart — week-by-week learning timeline
+                gantt_skills, gantt_starts, gantt_ends, gantt_colors, gantt_text = [], [], [], [], []
+                for step in plan:
+                    if isinstance(step, dict):
+                        w = step.get("week", 1)
+                        s = step.get("skill", f"Skill {w}")
+                        done_g = s in learned
+                        gantt_skills.append(s)
+                        gantt_starts.append(w - 1)
+                        gantt_ends.append(w)
+                        gantt_colors.append("#059669" if done_g else "#2563EB")
+                        gantt_text.append("✓ Done" if done_g else f"Week {w}")
+                if gantt_skills:
+                    fig_gantt = go.Figure()
+                    for i, (skill_g, start, end, color, txt) in enumerate(
+                        zip(gantt_skills, gantt_starts, gantt_ends, gantt_colors, gantt_text)
+                    ):
+                        fig_gantt.add_trace(go.Bar(
+                            x=[end - start], base=[start], y=[skill_g],
+                            orientation="h",
+                            marker=dict(color=color, line=dict(width=0)),
+                            text=txt, textposition="inside",
+                            textfont={"color": "#E2E8F0", "size": 10},
+                            showlegend=False,
+                            hovertemplate=f"<b>{skill_g}</b><br>Week {start+1}<extra></extra>",
+                        ))
+                    max_week = max(gantt_ends)
+                    fig_gantt.update_layout(
+                        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                        font={"color": "#C9D1D9"},
+                        height=max(200, len(gantt_skills) * 36 + 80),
+                        barmode="overlay", bargap=0.3,
+                        xaxis=dict(
+                            title="Week", range=[0, max_week + 0.2],
+                            tickvals=list(range(1, max_week + 1)),
+                            ticktext=[f"Wk {i}" for i in range(1, max_week + 1)],
+                            gridcolor="#1E2A3A", color="#8899AA",
+                        ),
+                        yaxis=dict(gridcolor="#1E2A3A", color="#C9D1D9"),
+                        margin=dict(l=10, r=10, t=10, b=30),
+                    )
+                    st.plotly_chart(fig_gantt, use_container_width=True, config={"displayModeBar": False})
+                    st.markdown("<div style='height:.5rem'></div>", unsafe_allow_html=True)
+
                 for step in plan:
                     if isinstance(step, dict):
                         week  = step.get("week", "?")
@@ -555,7 +807,7 @@ with compare_tab:
                 <div class="compare-card">
                   <div class="compare-title">{label}{crown}</div>
                   <div class="compare-score {score_cls}">{score}%</div>
-                  <div style="color:#8B949E;font-size:.8rem;margin:.3rem 0;">Readiness</div>
+                  <div style="color:#94A3B8;font-size:.8rem;margin:.3rem 0;">Readiness</div>
                   <div style="margin-top:.75rem;">
                     <span class="tag tag-green" style="margin:2px;">{matched_count} matched</span>
                     <span class="tag tag-red"   style="margin:2px;">{missing_count} gaps</span>
