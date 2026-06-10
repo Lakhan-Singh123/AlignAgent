@@ -1,0 +1,791 @@
+
+================================================================================
+                     ALIGNAGENT — PROJECT WALKTHROUGH
+              How every file works and how they connect together
+================================================================================
+
+Written for someone reading this codebase for the first time.
+No jargon. Every concept explained from scratch.
+
+--------------------------------------------------------------------------------
+WHAT DOES THIS PROJECT DO?
+--------------------------------------------------------------------------------
+
+You upload your resume (PDF) and paste a job description.
+AlignAgent reads both, compares them, and tells you:
+
+  - Which skills you already have (matched skills)
+  - Which skills you are missing (skill gaps)
+  - A week-by-week plan to learn the missing skills
+  - Free resources to study from
+  - Likely interview questions for that role
+  - Specific suggestions to improve your resume
+
+It runs 100% on your own computer. No internet API needed. No cost.
+It uses a local AI model called llama3.2 running through a tool called Ollama.
+
+
+--------------------------------------------------------------------------------
+THE BIG PICTURE — TWO MODES
+--------------------------------------------------------------------------------
+
+When you click "Analyse", you choose between two modes:
+
+  QUICK MODE (~40 seconds)
+  -------------------------
+  Resume text + JD text → directly fed to the AI → AI returns the report.
+  Simple. No vector database. Just text in, answer out.
+
+  DEEP MODE (~2-3 minutes)
+  -------------------------
+  Resume + JD → stored in a vector database → AI searches the database
+  → retrieves relevant chunks → grades them → generates report
+  → checks its own report for mistakes → retries if needed → saves report.
+  More powerful. Uses an 8-step agentic pipeline.
+
+Think of it like this:
+  Quick mode = asking a friend to read both documents and give feedback.
+  Deep mode  = hiring a researcher who organizes the documents, searches
+               through them carefully, fact-checks their own work, and
+               then gives you a thorough report.
+
+
+--------------------------------------------------------------------------------
+WHAT IS A VECTOR DATABASE? (Simple Explanation)
+--------------------------------------------------------------------------------
+
+Normal search looks for exact words. "Python" only finds "Python".
+
+Vector search converts words/sentences into a list of numbers (called an
+embedding or vector). Similar meaning = similar numbers.
+
+So "Python programming" and "coding in Python" will have very similar
+number lists, and a vector search will find both even if you only search
+for one of them.
+
+FAISS is the vector database used here. It is built by Facebook and stores
+these number lists. When you search, it finds the closest matching numbers
+using a math formula (Euclidean distance, like measuring straight-line
+distance between points in space).
+
+In this project:
+  - Your resume text is converted to number lists and stored in FAISS.
+  - Your job description is also stored in FAISS separately.
+  - When the AI needs context, it searches FAISS to retrieve the most
+    relevant sections instead of dumping the entire document.
+
+
+--------------------------------------------------------------------------------
+WHAT IS PARENT-CHILD CHUNKING?
+--------------------------------------------------------------------------------
+
+The documents are too long to feed to the AI all at once. So they are split
+into chunks (pieces).
+
+But there is a problem:
+  - Small chunks = better search accuracy (easy to find relevant piece)
+  - Large chunks = better context for the AI (more surrounding text)
+
+The solution used here is Parent-Child Chunking:
+
+  CHILD chunks (300 characters) — small pieces, stored in FAISS for searching
+  PARENT chunks (1200 characters) — large pieces, stored separately on disk
+
+When you search:
+  1. FAISS finds the matching CHILD chunk (small, accurate match)
+  2. The system then fetches the PARENT chunk (large, full context)
+  3. The AI gets the large parent chunk as its context
+
+Best of both worlds: accurate search + rich context.
+
+
+--------------------------------------------------------------------------------
+WHAT IS RAG? (Retrieval-Augmented Generation)
+--------------------------------------------------------------------------------
+
+RAG = Retrieval-Augmented Generation
+
+Instead of relying only on what the AI already knows, RAG:
+  1. Retrieves relevant documents from a database (Retrieval)
+  2. Adds those documents as context to the AI's prompt (Augmented)
+  3. The AI then generates its response based on that context (Generation)
+
+This prevents hallucination (making things up) because the AI is answering
+from actual documents, not from memory.
+
+
+--------------------------------------------------------------------------------
+WHAT IS AN AGENTIC PIPELINE?
+--------------------------------------------------------------------------------
+
+A normal AI call is: you ask → AI answers. Done.
+
+An agentic pipeline is a series of AI steps where each step can:
+  - Make decisions
+  - Call tools (like web search)
+  - Check its own work
+  - Loop back and retry if the result is bad
+
+AlignAgent's deep mode has 8 steps (called nodes) that run one after another.
+The pipeline is built using a library called LangGraph which manages
+the flow between steps and holds a shared state (data envelope) that
+all steps can read from and write to.
+
+
+--------------------------------------------------------------------------------
+FILE-BY-FILE EXPLANATION
+--------------------------------------------------------------------------------
+
+-------------------------------
+FILE 1: ingestion.py
+-------------------------------
+
+PURPOSE: Takes your documents and stores them in the FAISS vector database.
+
+THINK OF IT AS: The librarian who receives new books, sorts them into
+sections, and catalogs them so they can be found later.
+
+MAIN CLASS: MultiTenantIngestionPipeline
+
+  "Multi-tenant" means it creates a separate isolated database for each
+  user session. Your files never mix with another user's files.
+
+KEY METHODS:
+
+  __init__()
+    Sets up the folder paths for this session's database.
+    workspaces/<workspace_id>/faiss/   → where FAISS index is saved
+    workspaces/<workspace_id>/store/   → where parent chunks are saved
+
+  ingest(file_path)
+    Step 1: Read the document (PDF or TXT).
+    Step 2: Split into parent chunks (1200 chars).
+    Step 3: Split parents into child chunks (300 chars).
+    Step 4: Convert child chunks to number lists (embeddings) using
+            the nomic-embed-text model (768 numbers per chunk).
+    Step 5: Save child embeddings to FAISS index on disk.
+    Step 6: Save parent chunks to local file store on disk.
+
+  get_retriever()
+    Loads the saved FAISS index from disk.
+    Returns a ParentDocumentRetriever — an object that when given
+    a search query, finds matching children and returns their parents.
+
+  _load_or_create_vectorstore()
+    If a FAISS index already exists on disk, loads it.
+    If not, creates a brand new empty FAISS index (IndexFlatL2 with
+    768 dimensions to match the nomic-embed-text model output size).
+
+    IMPORTANT: The number 768 must match the embedding model's output.
+    nomic-embed-text outputs 768 numbers. If you change models, you must
+    delete old indexes and rebuild.
+
+
+-------------------------------
+FILE 2: skill_gap_analyzer.py
+-------------------------------
+
+PURPOSE: The core analysis brain. Takes candidate and internship workspaces,
+retrieves content from them, and generates the skill gap report.
+
+THINK OF IT AS: The analyst who reads through the documents and produces
+the structured comparison report.
+
+NOTE: This file is only used in DEEP MODE (called by graph.py Node 5).
+Quick mode uses analyzer.py instead.
+
+MAIN CLASS: SkillGapAnalyzer
+
+KEY CONCEPTS:
+
+  It connects to TWO workspaces:
+    - candidate_workspace  → your resume database
+    - internship_workspace → the job description database
+
+  It uses ChatOllama (the local llama3.2 model) to generate the report.
+
+KEY METHODS:
+
+  analyze()
+    The main method. Does everything in sequence:
+    1. Retrieve context from candidate workspace
+    2. Retrieve context from internship workspace
+    3. If fallback_only=True: use regex (no AI), always works
+    4. Otherwise: build prompt → send to AI → get JSON response
+    5. Run audit_report() to check for hallucinations
+    6. Parse the JSON into a SkillGapReport dataclass
+    7. Return the final report
+
+  _retrieve_context(workspace_id, query)
+    Creates a MultiTenantIngestionPipeline for that workspace.
+    Calls get_retriever().invoke(query) to search FAISS.
+    Returns a list of Document objects (parent chunks).
+
+  _build_prompt(candidate_context, internship_context)
+    Builds the text prompt sent to the AI.
+    Tells the AI: "Compare these two, return only valid JSON with
+    these exact keys: matched_skills, missing_skills, learning_plan..."
+
+  audit_report(report, candidate_context, internship_context)
+    Sends the generated report BACK to the AI with a second prompt:
+    "Check if every matched skill is actually supported by the evidence.
+    If something is made up, remove it."
+    This is a hallucination check — the AI reviews its own work.
+
+  _build_fallback_report()
+    Does NOT use AI at all.
+    Uses regex patterns to scan text for known skill keywords.
+    Computes overlap (matched) and difference (missing) using Python sets.
+    Always works even if Ollama is offline.
+
+  _extract_candidate_skills()
+    Smart regex that removes gap sentences BEFORE scanning for skills.
+    Example: "I am currently learning Docker" → Docker is NOT added to
+    matched skills because the sentence signals it is a gap, not a skill.
+
+DATACLASS: SkillGapReport (frozen=True means it cannot be changed after creation)
+  Fields: candidate_summary, internship_summary, matched_skills,
+          missing_skills, learning_plan, resources, timeline_weeks,
+          recommended_projects, readiness_score, raw_response
+
+
+-------------------------------
+FILE 3: analyzer.py
+-------------------------------
+
+PURPOSE: Quick 2-step LLM analysis. No vector database. Just text in, report out.
+
+THINK OF IT AS: The express checkout lane. Fewer steps, faster result.
+
+NOTE: This is used in QUICK MODE and also for interview questions and
+resume suggestions in DEEP MODE (graph.py does not generate these, so
+app.py calls analyzer.py for them after the graph finishes).
+
+KEY FUNCTIONS:
+
+  get_ai_analysis(resume_text, job_description)
+    The main public function. Calls everything in order.
+    Returns a dict with all report fields.
+
+    Step 1: _get_skills_and_score()
+      Sends resume + JD to AI.
+      Asks for: matched_skills, missing_skills, readiness_score.
+      Returns JSON.
+
+    Step 2: _get_plan_and_resources()
+      Sends only the missing skills to AI (not the full documents).
+      Step 2a: asks for learning plan (array of week objects).
+      Step 2b: asks for resources (one resource per skill).
+      Split into two separate calls to avoid the AI running out of
+      context and returning a truncated/empty response.
+
+    Step 3: get_interview_questions() and get_resume_suggestions()
+      Two more focused AI calls.
+
+    If ANY step fails: _local_fallback() runs instead (regex only).
+
+  _extract_json(text)
+    The AI sometimes wraps its response in markdown code fences like:
+    ```json { ... } ```
+    This function strips those fences and pulls out just the JSON object.
+
+  _repair_json(text)
+    If the JSON is cut off mid-way (truncated), this tries to fix it.
+    It tracks bracket depth and cuts at the last safe closing position,
+    then closes any unclosed brackets.
+
+  scrape_jd_from_url(url)
+    Uses requests + BeautifulSoup to fetch a job posting webpage.
+    Strips script/style/nav/footer tags.
+    Returns plain visible text up to _MAX_JD_CHARS limit.
+
+  _MAX_RESUME_CHARS = 3000
+  _MAX_JD_CHARS = 2000
+    Hard caps to prevent overflowing llama3.2's context window.
+    The AI performs worse (or returns empty) if given too much text.
+
+
+-------------------------------
+FILE 4: graph.py
+-------------------------------
+
+PURPOSE: The 8-node agentic pipeline. The "deep" brain of the project.
+
+THINK OF IT AS: An assembly line where each station does one specific job
+and passes the work to the next station. Some stations can send work back
+to an earlier station if quality is not good enough.
+
+KEY CONCEPT — AgentState (TypedDict):
+  This is the shared data envelope that flows through all 8 nodes.
+  Every node reads from it and writes its results back to it.
+
+  Fields in AgentState:
+    candidate_id          → which workspace holds the resume
+    internship_id         → which workspace holds the JD
+    analysis_report_path  → where to save the final report
+    candidate_queries     → search queries for the resume (generated by Node 1)
+    internship_queries    → search queries for the JD (generated by Node 1)
+    candidate_docs        → retrieved documents from resume (filled by Node 2)
+    internship_docs       → retrieved documents from JD (filled by Node 2)
+    candidate_context     → formatted text from candidate docs (filled by Node 2)
+    internship_context    → formatted text from internship docs (filled by Node 2)
+    web_context           → extra context from DuckDuckGo (filled by Node 4)
+    raw_report            → the JSON report string (filled by Node 5)
+    resources             → learning resources dict (filled by Node 6)
+    grounding_passed      → True/False: did the reflection check pass? (Node 7)
+    retry_count           → how many times have we retried? (prevents infinite loop)
+
+THE 8 NODES:
+
+  Node 1: generate_queries_node
+    Asks the AI to write its own search queries for FAISS.
+    Instead of hardcoded search strings, the AI generates targeted questions
+    like "What Python projects has the candidate built?" and
+    "What technical skills does this internship require?"
+    This is called Dynamic Query Generation.
+
+  Node 2: retrieve_node
+    Calls ingestion.py's get_retriever() for both workspaces.
+    Runs all generated queries against FAISS.
+    Collects and deduplicates the returned parent chunks.
+    Formats them into context strings.
+
+  Node 3: grade_docs_node
+    For each retrieved document, asks the AI: "Score this document
+    1 to 5 for relevance to the analysis task."
+    Documents scoring below 3 are removed.
+    This is called Corrective RAG (CRAG) — only high-quality evidence
+    is passed forward.
+
+  [DECISION POINT after Node 3]
+    If total surviving docs < 2: go to Node 4 (web search needed)
+    If enough docs remain: skip to Node 5 (generate report)
+
+  Node 4: web_search_node
+    Uses DuckDuckGo to search for extra context about the role.
+    Adds results to web_context in AgentState.
+    This fires automatically when local documents are too sparse.
+
+  Node 5: generate_report_node
+    Creates a SkillGapAnalyzer (from skill_gap_analyzer.py).
+    Calls analyzer.analyze() which retrieves from FAISS again,
+    builds the prompt, calls Ollama, audits the result.
+    Stores the JSON report string in AgentState.raw_report.
+
+  Node 6: generate_resources_node
+    Takes the missing_skills from the report.
+    Does a web search per skill for learning resources.
+    Fills AgentState.resources dict.
+
+  Node 7: reflect_node
+    Reads the raw_report and asks the AI:
+    "Is this report grounded in the actual evidence provided?
+    Are there any hallucinations? Return JSON: {grounded: true/false}"
+    Sets AgentState.grounding_passed.
+
+  [DECISION POINT after Node 7]
+    If grounding_passed = True OR retry_count >= 2: go to Node 8
+    If grounding_passed = False AND retry < 2: go back to Node 2
+    (increment retry_count first to prevent infinite loop)
+
+  Node 8: save_report_node
+    Takes AgentState.raw_report (JSON string).
+    Writes it to disk at analysis_report_path.
+    Pipeline is complete.
+
+HOW THE GRAPH IS BUILT:
+  StateGraph(AgentState) → add_node() for each function → add_edge() for
+  linear connections → add_conditional_edges() for decision points →
+  compile() into agent_graph.
+
+  agent_graph.stream(initial_state) runs the graph and yields one event
+  (dict) per node as it completes, enabling real-time progress display.
+
+
+-------------------------------
+FILE 5: pipeline.py
+-------------------------------
+
+PURPOSE: The bridge between the Streamlit file upload and the agentic graph.
+
+THINK OF IT AS: The intake desk. It receives your raw uploaded files,
+gives the session a unique ID, stores the files in the database, and
+then hands control to the graph.
+
+WITHOUT pipeline.py:
+  app.py would need to know about ingestion.py, workspace IDs, temp files,
+  graph initialization, etc. It would be messy.
+
+WITH pipeline.py:
+  app.py just calls run_agentic_analysis() and gets back a stream of events.
+
+KEY FUNCTION: run_agentic_analysis(file_bytes, filename, jd_text)
+
+  Step 1: session_id = uuid4().hex[:8]
+    Generates a random 8-character ID like "a3f9c12b".
+    uuid4() is universally unique — no two sessions will ever share an ID.
+    .hex[:8] keeps it short (first 8 characters of the hex string).
+
+  Step 2: Build workspace IDs
+    candidate_id  = "session_a3f9c12b_candidate"
+    internship_id = "session_a3f9c12b_internship"
+    These become folder names under workspaces/
+
+  Step 3: Save file_bytes to a temp file
+    The browser sends the file as raw bytes.
+    We write those bytes to a real file on disk so ingestion.py can read it.
+
+  Step 4: ingestion.py.ingest(temp_resume_path, candidate_id)
+    Processes the resume into FAISS and stores it.
+
+  Step 5: Save jd_text to a temp file
+    Same process for the job description text.
+
+  Step 6: ingestion.py.ingest(temp_jd_path, internship_id)
+    Processes the JD into its own separate FAISS workspace.
+
+  Step 7: Build initial AgentState dict
+    Fills in candidate_id, internship_id, analysis_report_path.
+    All other fields start empty ([], "", {}, False, 0).
+
+  Step 8: yield from agent_graph.stream(initial_state)
+    Runs the 8-node graph and yields events as each node completes.
+    app.py receives these events and updates the progress display live.
+
+
+-------------------------------
+FILE 6: progress.py
+-------------------------------
+
+PURPOSE: Saves which skills you have marked as learned. Persists between
+browser refreshes using a local JSON file.
+
+THINK OF IT AS: Your personal progress notebook saved on disk.
+
+DATA FILE: progress.json
+  { "learned": ["Python", "SQL"], "all_missing": ["Docker", "CI/CD", "React"] }
+
+KEY FUNCTIONS:
+
+  set_missing_skills(skills)
+    Called right after analysis finishes.
+    Saves the full list of missing skills to progress.json.
+    This populates the sidebar checkboxes.
+
+  toggle_skill(skill, learned)
+    Called when you click a checkbox in the sidebar.
+    Adds or removes a skill from the "learned" list in progress.json.
+
+  effective_score(base_score, matched, missing)
+    Recalculates your readiness score in real time.
+    If you had 5 missing skills and you checked off 3 as learned,
+    those 3 now count as matched skills.
+    New score = (original_matched + 3_learned) / total * 100
+
+  node_label(node_name)
+    Converts internal node function names to human-readable labels.
+    "generate_queries_node" → "Generate Queries"
+    "grade_docs_node" → "Grade Documents"
+    Used in the progress display during deep mode analysis.
+
+
+-------------------------------
+FILE 7: export.py
+-------------------------------
+
+PURPOSE: Converts the analysis result dict into downloadable files.
+
+THINK OF IT AS: The printing and packaging department.
+
+KEY FUNCTIONS:
+
+  generate_html_report(report, candidate_name)
+    Takes the report dict.
+    Returns a complete self-contained HTML string with all sections:
+    score, skill tags, timeline table, resources list, interview questions,
+    resume tips.
+    "Self-contained" means all styles are embedded — no external files needed.
+    You can open this file offline in any browser.
+    To save as PDF: open in browser → Print → Save as PDF.
+
+  generate_json_bytes(report)
+    Simply converts the report dict to pretty-printed JSON bytes.
+    Used for the raw JSON download button.
+
+
+-------------------------------
+FILE 8: app.py
+-------------------------------
+
+PURPOSE: The entire user interface. What you see in the browser.
+Contains no analysis logic — it only wires the other files together.
+
+THINK OF IT AS: The front desk and display window of the entire application.
+
+STRUCTURE:
+
+  CSS block (lines 31-269)
+    All visual styling. Dark theme (#080C14 background), gradients,
+    hover effects, card styles, chart colors.
+
+  Sidebar
+    Loads all_missing from progress.py.
+    Renders a checkbox per skill.
+    When a checkbox changes: calls progress.py.toggle_skill() → st.rerun().
+
+  Tab 1: Analyse
+    Left column: PDF uploader.
+    Right column: JD text area OR URL input (calls analyzer.scrape_jd_from_url).
+    Radio button: Quick vs Deep mode selection.
+    "Analyse" button: triggers the analysis.
+
+    QUICK MODE branch:
+      Calls analyzer.get_ai_analysis(resume_text, jd_text).
+      Waits for result (blocking spinner).
+
+    DEEP MODE branch:
+      Imports pipeline.run_agentic_analysis (lazy import, only when needed).
+      Loops over events from run_agentic_analysis().
+      Each event = one completed node.
+      Updates a progress display div in real time using st.empty().
+      After loop ends: reads report JSON from disk.
+      Calls analyzer.get_interview_questions() and get_resume_suggestions()
+      (graph does not generate these, so they are added after).
+
+    After report is loaded:
+      Calls progress.set_missing_skills() to populate the sidebar.
+      Calls progress.effective_score() for the adjusted score.
+
+      3 score cards: Readiness %, Weeks Remaining, Skills Learned.
+      3 Plotly charts: Gauge, Donut, Skill Map bar chart.
+      Skill tags: green (have), red (missing).
+      6 result tabs: Learning Plan (with Gantt chart), Resources,
+                     Interview Prep, Resume Tips, Projects, Export.
+
+  Tab 2: Compare Jobs
+    Upload resume once, paste up to 3 job descriptions.
+    Calls analyzer.get_ai_analysis() for each JD separately.
+    Sorts results by score descending.
+    Displays side-by-side score cards with matched/missing counts.
+    Highlights the highest scoring job as "Best Fit".
+
+  Export tab:
+    Calls export.generate_html_report() → st.download_button (HTML).
+    Calls export.generate_json_bytes() → st.download_button (JSON).
+
+
+-------------------------------
+OTHER FILES
+-------------------------------
+
+  run_agent.py
+    CLI (command-line) entry point. No UI.
+    Builds an initial AgentState manually with hardcoded workspace IDs.
+    Calls agent_graph.stream() directly.
+    Prints results to the terminal.
+    Useful for testing the graph without opening the browser.
+
+  ingest_workspace.py
+    CLI tool to manually ingest a single file into a named workspace.
+    Example: python ingest_workspace.py --workspace candidate_demo --path resume.txt
+    Used to pre-populate workspaces for the CLI demo.
+
+  retrieve_smoke_test.py
+    Developer testing tool. Not part of the main app flow.
+    Lets you search a workspace manually and print the retrieved chunks.
+    Useful to check if ingestion worked correctly.
+
+  test_ingestion.py
+    Automated tests for ingestion.py using pytest.
+
+  test_skill_gap_analyzer.py
+    Automated tests for skill_gap_analyzer.py using pytest.
+
+  .env
+    Stores configuration values. Never committed to git.
+    OLLAMA_BASE_URL=http://localhost:11434
+    OLLAMA_MODEL=llama3.2
+    OLLAMA_EMBEDDING_MODEL=nomic-embed-text
+
+  .env.example
+    A safe copy of .env with no secrets. Committed to git.
+    New developers copy this to .env and fill in their own values.
+
+  requirements.txt
+    Lists every Python package the project needs.
+    Run: pip install -r requirements.txt to install all dependencies.
+
+
+--------------------------------------------------------------------------------
+THE COMPLETE FLOW — ONE FULL EXAMPLE (DEEP MODE)
+--------------------------------------------------------------------------------
+
+  You open the browser at http://localhost:8501   (app.py is running)
+
+  1. You upload resume.pdf and paste a job description.
+     You select "Deep Agentic" mode and click "Analyse my fit".
+
+  2. app.py reads the PDF bytes and JD text.
+     It calls pipeline.run_agentic_analysis(pdf_bytes, "resume.pdf", jd_text).
+
+  3. pipeline.py generates session_id = "f2a1b9c3".
+     It saves the PDF bytes to /tmp/resume_f2a1b9c3.pdf.
+     It calls ingestion.py to process that file:
+       - Splits into 1200-char parent chunks
+       - Splits into 300-char child chunks
+       - Embeds children with nomic-embed-text (768 numbers each)
+       - Saves FAISS index to workspaces/session_f2a1b9c3_candidate/faiss/
+       - Saves parent chunks to workspaces/session_f2a1b9c3_candidate/store/
+
+  4. pipeline.py saves JD text to /tmp/jd_f2a1b9c3.txt.
+     Same ingestion process → workspaces/session_f2a1b9c3_internship/
+
+  5. pipeline.py builds the initial AgentState and calls agent_graph.stream().
+
+  6. graph.py Node 1 runs:
+     AI writes queries: ["What programming languages does the candidate know?",
+     "What projects has the candidate built?", ...]
+     AgentState.candidate_queries = [those queries]
+
+  7. app.py receives the Node 1 event. Updates the progress display:
+     "✓ Generate Queries"
+
+  8. graph.py Node 2 runs:
+     Calls ingestion.py.get_retriever() for candidate workspace.
+     Searches FAISS with each query. Gets back parent chunks of the resume.
+     Same for internship workspace.
+     AgentState.candidate_docs = [Document(...), Document(...), ...]
+
+  9. app.py shows: "✓ Retrieve Documents"
+
+  10. graph.py Node 3 runs:
+      For each document, AI scores relevance. Filters out weak ones.
+      Say 6 docs survive with scores 4 and 5.
+
+  11. Since we have enough docs, routing skips Node 4 (web search).
+
+  12. graph.py Node 5 runs:
+      Creates SkillGapAnalyzer(candidate_id="session_f2a1b9c3_candidate", ...)
+      Calls analyze():
+        Retrieves docs from FAISS again (its own retrieval pass).
+        Builds the full analysis prompt.
+        Sends to llama3.2 → AI returns JSON with matched/missing/plan/score.
+        audit_report() sends the JSON back to AI for hallucination check.
+        Returns SkillGapReport.
+      AgentState.raw_report = '{"matched_skills": [...], ...}'
+
+  13. graph.py Node 6 runs:
+      Web searches for each missing skill: "best free Docker tutorial 2024"
+      AgentState.resources = {"Docker": [{title: "...", url: "...", type: "course"}]}
+
+  14. graph.py Node 7 runs:
+      AI reads the report. Decides: grounded = True.
+      AgentState.grounding_passed = True.
+
+  15. Since grounded, routing goes to Node 8.
+
+  16. graph.py Node 8 runs:
+      Writes raw_report to reports/final_gap_report.json on disk.
+      Pipeline complete.
+
+  17. app.py loop ends. Reads reports/final_gap_report.json.
+      Calls analyzer.get_interview_questions() → 6 questions.
+      Calls analyzer.get_resume_suggestions() → 5 tips.
+      Calls progress.set_missing_skills(missing) → saves to progress.json.
+      Calls progress.effective_score() → adjusted readiness %.
+
+  18. app.py renders:
+      3 score cards (Readiness, Weeks Remaining, Skills Learned)
+      Plotly gauge chart (speedometer showing 63%)
+      Plotly donut chart (5 matched, 3 missing)
+      Plotly skill map bar chart (each skill as a colored bar)
+      Learning Plan tab with Gantt chart + week cards
+      Resources tab with links per skill
+      Interview Prep tab with 6 questions
+      Resume Tips tab with 5 suggestions
+      Export tab with HTML and JSON download buttons
+
+  19. Sidebar shows checkboxes for each missing skill.
+      You check "Docker" → progress.py updates progress.json.
+      Score recalculates: was 63%, now shows 71% (Docker counted as learned).
+
+
+--------------------------------------------------------------------------------
+WHY CERTAIN DESIGN DECISIONS WERE MADE
+--------------------------------------------------------------------------------
+
+WHY UUID for session IDs?
+  Without unique IDs, two users running the app at the same time would
+  write to the same FAISS folder and corrupt each other's data.
+  UUID = guaranteed unique every single time.
+
+WHY split into parent and child chunks?
+  Small chunks = better vector search accuracy.
+  Large chunks = better AI comprehension (more context around the answer).
+  Parent-child gives you both without compromise.
+
+WHY split the LLM analysis into multiple steps?
+  Sending one giant prompt (resume + JD + complex JSON schema) to llama3.2
+  often causes it to run out of space and return an empty response.
+  Breaking into focused smaller prompts (Step 1: just skills, Step 2: just plan)
+  keeps each prompt well within the model's limits.
+
+WHY have a local fallback that uses regex?
+  The AI can fail: Ollama crashes, the model is loading, the response is
+  malformed. The regex fallback uses Python set operations to detect known
+  skills from both documents and always returns a valid result.
+  This means the app never crashes even when the AI is unavailable.
+
+WHY does graph.py use LangGraph instead of just calling functions?
+  LangGraph gives you: shared state across all steps, conditional routing
+  (go to web search OR skip it), retry loops (go back to retrieve if
+  reflection fails), and streaming events (so the UI can show live progress).
+  Regular function calls cannot do all of this cleanly.
+
+WHY does Deep Mode call analyzer.py for interview questions and resume tips?
+  These are not part of the core analysis (skill gap report) so they were
+  not included in the graph. After the graph finishes, app.py simply calls
+  analyzer.py for these two extra LLM calls. Keeps the graph focused on
+  its core job and avoids bloating it with every possible feature.
+
+
+--------------------------------------------------------------------------------
+QUICK REFERENCE — FILE RESPONSIBILITIES
+--------------------------------------------------------------------------------
+
+  ingestion.py          Store and retrieve documents from FAISS
+  skill_gap_analyzer.py Generate the skill gap report (used by deep mode)
+  analyzer.py           Quick LLM analysis, interview Q, resume tips
+  graph.py              8-node agentic pipeline and AgentState
+  pipeline.py           Bridge: file upload → UUID → ingest → run graph
+  progress.py           Save/load skill learning progress (progress.json)
+  export.py             Convert report dict to HTML and JSON downloads
+  app.py                Streamlit UI — wires all files together
+
+  run_agent.py          CLI way to run the graph (no browser needed)
+  ingest_workspace.py   CLI way to manually ingest files into a workspace
+  retrieve_smoke_test.py  CLI tool to test if retrieval is working
+
+
+--------------------------------------------------------------------------------
+HOW TO RUN THE PROJECT
+--------------------------------------------------------------------------------
+
+  Prerequisites:
+    1. Install Ollama from https://ollama.com
+    2. Run: ollama pull llama3.2
+    3. Run: ollama pull nomic-embed-text
+    4. Run: pip install -r requirements.txt
+    5. Copy .env.example to .env (no changes needed for local setup)
+
+  Start the app:
+    streamlit run app.py
+    Opens at http://localhost:8501
+
+  Run via CLI (without UI):
+    python run_agent.py
+    (requires pre-ingested workspaces named candidate_demo and internship_demo)
+
+================================================================================
+END OF WALKTHROUGH
+================================================================================
