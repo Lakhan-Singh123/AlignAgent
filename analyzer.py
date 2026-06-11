@@ -4,7 +4,12 @@ import os
 import re
 
 from dotenv import load_dotenv
-from langchain_groq import ChatGroq
+try:
+    from langchain_groq import ChatGroq
+except ImportError as e:
+    raise ImportError(
+        "langchain-groq is not installed. Run: pip install langchain-groq"
+    ) from e
 from pypdf import PdfReader
 
 load_dotenv()
