@@ -9,6 +9,7 @@ except ImportError:
 
 from analyzer import (
     extract_text_from_pdf,
+    generate_cover_letter,
     get_ai_analysis,
     get_interview_questions,
     get_resume_suggestions,
@@ -601,10 +602,10 @@ with mode_tab:
         st.markdown("<hr class='divider'>", unsafe_allow_html=True)
 
         # ── Result tabs ───────────────────────────────────────────────────────
-        t1, t2, t3, t4, t5, t6 = st.tabs([
+        t1, t2, t3, t4, t5, t6, t7 = st.tabs([
             "📅 Learning Plan", "📚 Resources",
             "🎤 Interview Prep", "📝 Resume Tips",
-            "🛠 Projects", "📥 Export",
+            "🛠 Projects", "✉️ Cover Letter", "📥 Export",
         ])
 
         with t1:
@@ -728,6 +729,53 @@ with mode_tab:
                 st.info("No projects generated.")
 
         with t6:
+            st.markdown('<div class="section-title">Tailored Cover Letter</div>', unsafe_allow_html=True)
+            st.caption("AI-generated based on your resume and the job description. Review and personalise before sending.")
+
+            if "cover_letter" not in st.session_state:
+                st.session_state.cover_letter = ""
+
+            gen_col, _ = st.columns([1, 3])
+            with gen_col:
+                gen_btn = st.button("Generate Cover Letter", key="gen_cl")
+
+            if gen_btn:
+                with st.spinner("Writing your cover letter…"):
+                    st.session_state.cover_letter = generate_cover_letter(
+                        resume_text, job_description, matched
+                    )
+
+            if st.session_state.cover_letter:
+                cl_text = st.session_state.cover_letter
+
+                # Editable text area so the user can tweak inline
+                edited = st.text_area(
+                    "Edit before copying",
+                    value=cl_text,
+                    height=400,
+                    label_visibility="collapsed",
+                    key="cl_edit",
+                )
+
+                dl_col, _ = st.columns([1, 3])
+                with dl_col:
+                    st.download_button(
+                        "📄 Download .txt",
+                        data=edited.encode("utf-8"),
+                        file_name="cover_letter.txt",
+                        mime="text/plain",
+                        use_container_width=True,
+                    )
+                st.caption("Tip: copy the text above and paste it into your application portal.")
+            else:
+                st.markdown("""
+                <div class="empty-state">
+                  <div class="icon">✉️</div>
+                  <h3>No cover letter yet</h3>
+                  <p>Click <strong>Generate Cover Letter</strong> above to create one.</p>
+                </div>""", unsafe_allow_html=True)
+
+        with t7:
             st.markdown('<div class="section-title">Download your report</div>', unsafe_allow_html=True)
 
             dl1, dl2 = st.columns(2)

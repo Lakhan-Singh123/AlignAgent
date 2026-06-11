@@ -345,6 +345,51 @@ Return ONLY a JSON array of 5 suggestion strings (no markdown):
         ]
 
 
+# ── Cover Letter ─────────────────────────────────────────────────────────────
+
+def generate_cover_letter(resume_text: str, job_description: str, matched_skills: list) -> str:
+    """Generate a tailored cover letter based on the resume and job description."""
+    model = _llm()
+    skills_str = ", ".join(matched_skills[:8]) if matched_skills else "various relevant skills"
+    prompt = f"""You are an expert career coach. Write a professional cover letter for this candidate.
+
+RESUME (excerpt):
+{resume_text[:2000]}
+
+JOB DESCRIPTION (excerpt):
+{job_description[:1000]}
+
+CANDIDATE'S MATCHING SKILLS: {skills_str}
+
+Write a compelling, personalized cover letter that:
+- Opens with a strong hook (1 sentence referencing the specific role)
+- Highlights 2-3 of the candidate's most relevant achievements with specifics from their resume
+- Connects their matched skills directly to the job requirements
+- Addresses enthusiasm for the company/role
+- Closes with a confident call to action
+- Is 3-4 paragraphs, professional but not robotic
+- Does NOT use generic phrases like "I am writing to apply" or "I believe I would be a great fit"
+
+Return ONLY the cover letter text, no subject line, no date, no address headers. Start directly with "Dear Hiring Manager," or the hiring manager's name if mentioned."""
+
+    try:
+        response = model.invoke(prompt)
+        return response.content.strip()
+    except Exception as e:
+        logger.warning("Cover letter generation failed: %s", e)
+        name_line = resume_text.strip().split("\n")[0] if resume_text.strip() else "Candidate"
+        return f"""Dear Hiring Manager,
+
+I am excited to apply for this position. With my background in {skills_str}, I am confident I can contribute meaningfully to your team.
+
+Throughout my career I have developed strong expertise in the skills required for this role. I am eager to bring this experience to your organization and help drive results.
+
+I would welcome the opportunity to discuss how my background aligns with your needs. Thank you for your consideration.
+
+Sincerely,
+{name_line}"""
+
+
 # ── Public API ────────────────────────────────────────────────────────────────
 
 def get_ai_analysis(resume_text: str, job_description: str) -> dict:
