@@ -1,6 +1,11 @@
 import json
 import streamlit as st
-import plotly.graph_objects as go
+
+try:
+    import plotly.graph_objects as go
+    _PLOTLY_OK = True
+except ImportError:
+    _PLOTLY_OK = False
 
 from analyzer import (
     extract_text_from_pdf,
@@ -479,102 +484,100 @@ with mode_tab:
             </div>""", unsafe_allow_html=True)
 
         # ── Charts row ───────────────────────────────────────────────────────
-        ch1, ch2, ch3 = st.columns([1.1, 1, 1.4], gap="large")
+        if _PLOTLY_OK:
+            ch1, ch2, ch3 = st.columns([1.1, 1, 1.4], gap="large")
 
-        with ch1:
-            # Gauge — readiness score
-            gauge_color = "#34D399" if adj_score >= 70 else ("#FBBF24" if adj_score >= 40 else "#F87171")
-            fig_gauge = go.Figure(go.Indicator(
-                mode="gauge+number",
-                value=adj_score,
-                number={"suffix": "%", "font": {"size": 36, "color": "#E2E8F0"}},
-                gauge={
-                    "axis": {"range": [0, 100], "tickcolor": "#8899AA",
-                             "tickfont": {"color": "#8899AA", "size": 10}},
-                    "bar": {"color": gauge_color, "thickness": 0.28},
-                    "bgcolor": "#0D1220",
-                    "borderwidth": 0,
-                    "steps": [
-                        {"range": [0,  40], "color": "#2D0A0A"},
-                        {"range": [40, 70], "color": "#1C1205"},
-                        {"range": [70, 100], "color": "#052E16"},
-                    ],
-                    "threshold": {
-                        "line": {"color": gauge_color, "width": 3},
-                        "thickness": 0.82,
-                        "value": adj_score,
+            with ch1:
+                gauge_color = "#34D399" if adj_score >= 70 else ("#FBBF24" if adj_score >= 40 else "#F87171")
+                fig_gauge = go.Figure(go.Indicator(
+                    mode="gauge+number",
+                    value=adj_score,
+                    number={"suffix": "%", "font": {"size": 36, "color": "#E2E8F0"}},
+                    gauge={
+                        "axis": {"range": [0, 100], "tickcolor": "#8899AA",
+                                 "tickfont": {"color": "#8899AA", "size": 10}},
+                        "bar": {"color": gauge_color, "thickness": 0.28},
+                        "bgcolor": "#0D1220",
+                        "borderwidth": 0,
+                        "steps": [
+                            {"range": [0,  40], "color": "#2D0A0A"},
+                            {"range": [40, 70], "color": "#1C1205"},
+                            {"range": [70, 100], "color": "#052E16"},
+                        ],
+                        "threshold": {
+                            "line": {"color": gauge_color, "width": 3},
+                            "thickness": 0.82,
+                            "value": adj_score,
+                        },
                     },
-                },
-            ))
-            fig_gauge.update_layout(
-                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                font={"color": "#E2E8F0"}, height=210,
-                margin=dict(l=20, r=20, t=30, b=10),
-                title={"text": "Readiness Gauge", "font": {"size": 11, "color": "#8899AA"},
-                       "x": 0.5, "xanchor": "center"},
-            )
-            st.plotly_chart(fig_gauge, use_container_width=True, config={"displayModeBar": False})
-
-        with ch2:
-            # Donut — matched vs missing
-            donut_labels = ["Skills Matched", "Skills Missing"]
-            donut_values = [max(len(matched), 1), max(len(missing), 0)]
-            fig_donut = go.Figure(go.Pie(
-                labels=donut_labels,
-                values=donut_values,
-                hole=0.68,
-                marker=dict(colors=["#059669", "#DC2626"],
-                            line=dict(color="#080C14", width=3)),
-                textfont={"color": "#E2E8F0", "size": 11},
-                hovertemplate="%{label}: %{value}<extra></extra>",
-            ))
-            fig_donut.add_annotation(
-                text=f"<b>{len(matched)}/{len(matched)+len(missing)}</b>",
-                x=0.5, y=0.5, font_size=20, font_color="#E2E8F0", showarrow=False,
-            )
-            fig_donut.update_layout(
-                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                font={"color": "#C9D1D9"}, height=210,
-                showlegend=True,
-                legend=dict(font=dict(color="#C9D1D9", size=10),
-                            bgcolor="rgba(0,0,0,0)", orientation="h",
-                            x=0.5, xanchor="center", y=-0.05),
-                margin=dict(l=10, r=10, t=30, b=10),
-                title={"text": "Skills Breakdown", "font": {"size": 11, "color": "#8899AA"},
-                       "x": 0.5, "xanchor": "center"},
-            )
-            st.plotly_chart(fig_donut, use_container_width=True, config={"displayModeBar": False})
-
-        with ch3:
-            # Horizontal bar — all skills (green = have, red = missing)
-            all_skills  = matched + [s for s in missing if s not in learned]
-            bar_colors  = (["#059669"] * len(matched) +
-                           ["#DC2626"] * len([s for s in missing if s not in learned]))
-            bar_labels  = (["✓ " + s for s in matched] +
-                           ["✗ " + s for s in missing if s not in learned])
-            if all_skills:
-                fig_bar = go.Figure(go.Bar(
-                    y=bar_labels,
-                    x=[1] * len(bar_labels),
-                    orientation="h",
-                    marker=dict(color=bar_colors, line=dict(width=0)),
-                    text=bar_labels,
-                    textposition="inside",
-                    textfont={"color": "#E2E8F0", "size": 10},
-                    hoverinfo="skip",
                 ))
-                fig_bar.update_layout(
+                fig_gauge.update_layout(
                     paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                    font={"color": "#C9D1D9"},
-                    height=max(180, len(bar_labels) * 26 + 50),
-                    xaxis=dict(visible=False, range=[0, 1.05]),
-                    yaxis=dict(visible=False),
-                    margin=dict(l=5, r=5, t=30, b=10),
-                    bargap=0.25,
-                    title={"text": "Skill Map", "font": {"size": 11, "color": "#8899AA"},
+                    font={"color": "#E2E8F0"}, height=210,
+                    margin=dict(l=20, r=20, t=30, b=10),
+                    title={"text": "Readiness Gauge", "font": {"size": 11, "color": "#8899AA"},
                            "x": 0.5, "xanchor": "center"},
                 )
-                st.plotly_chart(fig_bar, use_container_width=True, config={"displayModeBar": False})
+                st.plotly_chart(fig_gauge, use_container_width=True, config={"displayModeBar": False})
+
+            with ch2:
+                donut_labels = ["Skills Matched", "Skills Missing"]
+                donut_values = [max(len(matched), 1), max(len(missing), 0)]
+                fig_donut = go.Figure(go.Pie(
+                    labels=donut_labels,
+                    values=donut_values,
+                    hole=0.68,
+                    marker=dict(colors=["#059669", "#DC2626"],
+                                line=dict(color="#080C14", width=3)),
+                    textfont={"color": "#E2E8F0", "size": 11},
+                    hovertemplate="%{label}: %{value}<extra></extra>",
+                ))
+                fig_donut.add_annotation(
+                    text=f"<b>{len(matched)}/{len(matched)+len(missing)}</b>",
+                    x=0.5, y=0.5, font_size=20, font_color="#E2E8F0", showarrow=False,
+                )
+                fig_donut.update_layout(
+                    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                    font={"color": "#C9D1D9"}, height=210,
+                    showlegend=True,
+                    legend=dict(font=dict(color="#C9D1D9", size=10),
+                                bgcolor="rgba(0,0,0,0)", orientation="h",
+                                x=0.5, xanchor="center", y=-0.05),
+                    margin=dict(l=10, r=10, t=30, b=10),
+                    title={"text": "Skills Breakdown", "font": {"size": 11, "color": "#8899AA"},
+                           "x": 0.5, "xanchor": "center"},
+                )
+                st.plotly_chart(fig_donut, use_container_width=True, config={"displayModeBar": False})
+
+            with ch3:
+                all_skills = matched + [s for s in missing if s not in learned]
+                bar_colors = (["#059669"] * len(matched) +
+                              ["#DC2626"] * len([s for s in missing if s not in learned]))
+                bar_labels = (["✓ " + s for s in matched] +
+                              ["✗ " + s for s in missing if s not in learned])
+                if all_skills:
+                    fig_bar = go.Figure(go.Bar(
+                        y=bar_labels,
+                        x=[1] * len(bar_labels),
+                        orientation="h",
+                        marker=dict(color=bar_colors, line=dict(width=0)),
+                        text=bar_labels,
+                        textposition="inside",
+                        textfont={"color": "#E2E8F0", "size": 10},
+                        hoverinfo="skip",
+                    ))
+                    fig_bar.update_layout(
+                        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                        font={"color": "#C9D1D9"},
+                        height=max(180, len(bar_labels) * 26 + 50),
+                        xaxis=dict(visible=False, range=[0, 1.05]),
+                        yaxis=dict(visible=False),
+                        margin=dict(l=5, r=5, t=30, b=10),
+                        bargap=0.25,
+                        title={"text": "Skill Map", "font": {"size": 11, "color": "#8899AA"},
+                               "x": 0.5, "xanchor": "center"},
+                    )
+                    st.plotly_chart(fig_bar, use_container_width=True, config={"displayModeBar": False})
 
         # ── Skill tags ────────────────────────────────────────────────────────
         sk1, sk2 = st.columns(2, gap="large")
@@ -617,7 +620,7 @@ with mode_tab:
                         gantt_ends.append(w)
                         gantt_colors.append("#059669" if done_g else "#2563EB")
                         gantt_text.append("✓ Done" if done_g else f"Week {w}")
-                if gantt_skills:
+                if gantt_skills and _PLOTLY_OK:
                     fig_gantt = go.Figure()
                     for i, (skill_g, start, end, color, txt) in enumerate(
                         zip(gantt_skills, gantt_starts, gantt_ends, gantt_colors, gantt_text)
