@@ -22,7 +22,7 @@ from langchain_community.document_loaders import Docx2txtLoader, PyPDFLoader, Te
 from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
-from langchain_ollama import OllamaEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 
 try:
     from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -55,8 +55,8 @@ class MultiTenantIngestionPipeline:
     PARENT_CHUNK_OVERLAP = 200
     CHILD_CHUNK_SIZE = 300
     CHILD_CHUNK_OVERLAP = 50
-    DEFAULT_EMBEDDING_DIMENSION = 768
-    DEFAULT_EMBEDDING_MODEL = "nomic-embed-text"
+    DEFAULT_EMBEDDING_DIMENSION = 384
+    DEFAULT_EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
     SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".txt"}
 
     def __init__(
@@ -100,11 +100,11 @@ class MultiTenantIngestionPipeline:
 
         self.embedding_model = (
             embedding_model
-            or os.getenv("OLLAMA_EMBEDDING_MODEL")
+            or os.getenv("EMBEDDING_MODEL")
             or self.DEFAULT_EMBEDDING_MODEL
         )
-        self.embeddings = embeddings or OllamaEmbeddings(
-            model=self.embedding_model
+        self.embeddings = embeddings or HuggingFaceEmbeddings(
+            model_name=self.embedding_model
         )
         logger.info("🧠 Embeddings initialized: %s", self.embedding_model)
 

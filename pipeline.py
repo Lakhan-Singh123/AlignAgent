@@ -2,12 +2,30 @@
 
 from __future__ import annotations
 
+import logging
+import os
+import shutil
 import tempfile
 import uuid
 from pathlib import Path
 
 from ingestion import MultiTenantIngestionPipeline
 from graph import app as agent_graph
+
+logger = logging.getLogger(__name__)
+
+
+def _cleanup(paths: list[str]) -> None:
+    """Delete temp files and workspace directories silently."""
+    for p in paths:
+        try:
+            path = Path(p)
+            if path.is_dir():
+                shutil.rmtree(path)
+            elif path.exists():
+                path.unlink()
+        except Exception:
+            pass
 
 
 def run_agentic_analysis(
@@ -21,17 +39,24 @@ def run_agentic_analysis(
     then run the full 8-node agentic graph.
 
     Yields LangGraph stream events so the caller can show real-time progress.
-    Returns the final state dict as the last yielded value.
+    Cleans up temp files and session workspaces after the graph completes.
     """
-    session_id   = uuid.uuid4().hex[:8]
-    candidate_id = f"session_{session_id}_candidate"
+    session_id    = uuid.uuid4().hex[:8]
+    candidate_id  = f"session_{session_id}_candidate"
     internship_id = f"session_{session_id}_internship"
+
+    workspace_base = Path(base_workspace_dir)
+    candidate_dir  = workspace_base / candidate_id
+    internship_dir = workspace_base / internship_id
+
+    temp_files: list[str] = []
 
     # ── Ingest resume ──────────────────────────────────────────────────────────
     suffix = Path(filename).suffix or ".pdf"
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as f:
         f.write(file_bytes)
         resume_path = f.name
+    temp_files.append(resume_path)
 
     pipeline = MultiTenantIngestionPipeline(
         workspace_id=candidate_id,
@@ -43,6 +68,7 @@ def run_agentic_analysis(
     with tempfile.NamedTemporaryFile(suffix=".txt", delete=False, mode="w", encoding="utf-8") as f:
         f.write(jd_text)
         jd_path = f.name
+    temp_files.append(jd_path)
 
     jd_pipeline = MultiTenantIngestionPipeline(
         workspace_id=internship_id,
@@ -68,9 +94,10 @@ def run_agentic_analysis(
         "retry_count":          0,
     }
 
-    final_state = initial_state
-    for event in agent_graph.stream(initial_state):
-        final_state = event
-        yield event   # caller uses this for progress display
-
-    return final_state
+    try:
+        for event in agent_graph.stream(initial_state):
+            yield event
+    finally:
+        # Always clean up — even if the graph errors mid-run
+        _cleanup(temp_files + [str(candidate_dir), str(internship_dir)])
+        logger.info("🧹 Cleaned up session workspaces for %s", session_id)

@@ -319,7 +319,12 @@ with mode_tab:
         st.markdown('<div class="input-label">Resume (PDF)</div>', unsafe_allow_html=True)
         uploaded_file = st.file_uploader("resume", type=["pdf"], label_visibility="collapsed")
         if uploaded_file:
-            st.success(f"✓  {uploaded_file.name}")
+            _MAX_MB = 5
+            if uploaded_file.size > _MAX_MB * 1024 * 1024:
+                st.error(f"File too large. Maximum size is {_MAX_MB} MB.")
+                uploaded_file = None
+            else:
+                st.success(f"✓  {uploaded_file.name}")
 
     with col_right:
         st.markdown('<div class="input-label">Job / Internship Description</div>', unsafe_allow_html=True)
@@ -333,12 +338,21 @@ with mode_tab:
                                    label_visibility="collapsed")
             job_description = ""
             if jd_url:
-                with st.spinner("Scraping job description…"):
-                    try:
-                        job_description = scrape_jd_from_url(jd_url)
-                        st.success(f"✓  Scraped {len(job_description)} characters")
-                    except Exception as e:
-                        st.error(str(e))
+                from urllib.parse import urlparse
+                _parsed = urlparse(jd_url)
+                _host = (_parsed.hostname or "").lower()
+                _blocked = ("localhost", "127.", "0.0.0.0", "10.", "192.168.", "169.254.", "::1")
+                if _parsed.scheme not in ("http", "https"):
+                    st.error("Only http/https URLs are allowed.")
+                elif any(_host.startswith(b) for b in _blocked):
+                    st.error("That URL is not allowed.")
+                else:
+                    with st.spinner("Scraping job description…"):
+                        try:
+                            job_description = scrape_jd_from_url(jd_url)
+                            st.success(f"✓  Scraped {len(job_description)} characters")
+                        except Exception as e:
+                            st.error(str(e))
 
     st.markdown("<div style='height:.5rem'></div>", unsafe_allow_html=True)
 

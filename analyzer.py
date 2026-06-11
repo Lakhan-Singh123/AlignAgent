@@ -4,7 +4,7 @@ import os
 import re
 
 from dotenv import load_dotenv
-from langchain_ollama import ChatOllama
+from langchain_groq import ChatGroq
 from pypdf import PdfReader
 
 load_dotenv()
@@ -51,7 +51,11 @@ _SKILL_PATTERNS = {
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _llm():
-    return ChatOllama(model=os.getenv("OLLAMA_MODEL", "llama3.2"), temperature=0.2)
+    return ChatGroq(
+        model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
+        temperature=0.2,
+        groq_api_key=os.getenv("GROQ_API_KEY"),
+    )
 
 
 def _extract_json(text: str) -> dict:

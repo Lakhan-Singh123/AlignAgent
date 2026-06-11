@@ -13,7 +13,7 @@ from typing import Any, Protocol
 
 from dotenv import load_dotenv
 from langchain_core.documents import Document
-from langchain_ollama import ChatOllama
+from langchain_groq import ChatGroq
 
 from ingestion import MultiTenantIngestionPipeline
 
@@ -52,7 +52,7 @@ class SkillGapReport:
 class SkillGapAnalyzer:
     """Compare candidate and internship workspaces and generate a gap report."""
 
-    DEFAULT_ANALYSIS_MODEL = "llama3.2"
+    DEFAULT_ANALYSIS_MODEL = "llama-3.3-70b-versatile"
     RESUME_QUERY = (
         "Candidate technical skills, tools, projects, experience, education, "
         "strengths, and internship interests."
@@ -91,11 +91,12 @@ class SkillGapAnalyzer:
         elif self.fallback_only:
             self.llm = None
         else:
-            self.llm = ChatOllama(
+            self.llm = ChatGroq(
                 model=analysis_model
-                or os.getenv("OLLAMA_MODEL")
+                or os.getenv("GROQ_MODEL")
                 or self.DEFAULT_ANALYSIS_MODEL,
                 temperature=0.2,
+                groq_api_key=os.getenv("GROQ_API_KEY"),
             )
 
     def analyze(self) -> SkillGapReport:

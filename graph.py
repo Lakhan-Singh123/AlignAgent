@@ -26,7 +26,7 @@ from typing import List, TypedDict
 
 from dotenv import load_dotenv
 from langchain_core.documents import Document
-from langchain_ollama import ChatOllama
+from langchain_groq import ChatGroq
 from langgraph.graph import END, StateGraph
 
 from ingestion import MultiTenantIngestionPipeline
@@ -67,8 +67,12 @@ class AgentState(TypedDict):
 
 # ── Shared LLM ────────────────────────────────────────────────────────────────
 
-def _llm() -> ChatOllama:
-    return ChatOllama(model=os.getenv("OLLAMA_MODEL", "llama3.2"), temperature=0.2)
+def _llm() -> ChatGroq:
+    return ChatGroq(
+        model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
+        temperature=0.2,
+        groq_api_key=os.getenv("GROQ_API_KEY"),
+    )
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
