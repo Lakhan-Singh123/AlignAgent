@@ -484,6 +484,24 @@ with mode_tab:
         # Persist missing skills to progress tracker
         set_missing_skills(report.get("missing_skills", []))
 
+        # Save everything needed for rendering — tab buttons trigger reruns
+        # where run_btn is False, so we must read from session_state
+        st.session_state._result = {
+            "report":          report,
+            "resume_text":     resume_text,
+            "job_description": job_description,
+            "filename":        uploaded_file.name,
+        }
+        st.session_state.ats_report   = None
+        st.session_state.cover_letter = ""
+
+    # ── Render results (persists across reruns triggered by tab buttons) ──────
+    _r = st.session_state.get("_result")
+    if _r:
+        report          = _r["report"]
+        resume_text     = _r["resume_text"]
+        job_description = _r["job_description"]
+
         score    = report.get("readiness_score", 0)
         timeline = report.get("timeline_weeks")
         matched  = report.get("matched_skills", [])
@@ -493,17 +511,17 @@ with mode_tab:
         projects = report.get("recommended_projects", [])
         interview= report.get("interview_questions", [])
         tips     = report.get("resume_suggestions", [])
-
+    
         # Adjusted score based on progress tracker
         adj_score = effective_score(score, matched, missing)
         learned   = set(get_learned_skills())
-
+    
         # ── Score cards ───────────────────────────────────────────────────────
         sc, tc, ec = st.columns([1, 1, 1], gap="large")
-
+    
         score_cls = "green" if adj_score >= 70 else ("yellow" if adj_score >= 40 else "red")
         score_sub = "Strong fit" if adj_score >= 70 else ("Getting there" if adj_score >= 40 else "Needs work")
-
+    
         with sc:
             st.markdown(f"""
             <div class="score-card">
@@ -512,7 +530,7 @@ with mode_tab:
               <div class="score-sub {score_cls}">{score_sub}</div>
             </div>""", unsafe_allow_html=True)
             st.progress(adj_score / 100)
-
+    
         with tc:
             if timeline:
                 remaining_weeks = max(0, timeline - len(learned))
@@ -522,7 +540,7 @@ with mode_tab:
                   <div class="score-number purple">{remaining_weeks}</div>
                   <div class="score-sub" style="color:#94A3B8;">of {timeline} week plan</div>
                 </div>""", unsafe_allow_html=True)
-
+    
         with ec:
             skills_learned = len([s for s in missing if s in learned])
             pct = round(skills_learned / len(missing) * 100) if missing else 100
@@ -532,11 +550,11 @@ with mode_tab:
               <div class="score-number" style="color:#58A6FF;">{skills_learned}/{len(missing)}</div>
               <div class="score-sub" style="color:#94A3B8;">{pct}% of gaps closed</div>
             </div>""", unsafe_allow_html=True)
-
+    
         # ── Charts row ───────────────────────────────────────────────────────
         if _PLOTLY_OK:
             ch1, ch2, ch3 = st.columns([1.1, 1, 1.4], gap="large")
-
+    
             with ch1:
                 gauge_color = "#34D399" if adj_score >= 70 else ("#FBBF24" if adj_score >= 40 else "#F87171")
                 fig_gauge = go.Figure(go.Indicator(
@@ -569,7 +587,7 @@ with mode_tab:
                            "x": 0.5, "xanchor": "center"},
                 )
                 st.plotly_chart(fig_gauge, use_container_width=True, config={"displayModeBar": False})
-
+    
             with ch2:
                 donut_labels = ["Skills Matched", "Skills Missing"]
                 donut_values = [max(len(matched), 1), max(len(missing), 0)]
@@ -598,7 +616,7 @@ with mode_tab:
                            "x": 0.5, "xanchor": "center"},
                 )
                 st.plotly_chart(fig_donut, use_container_width=True, config={"displayModeBar": False})
-
+    
             with ch3:
                 all_skills = matched + [s for s in missing if s not in learned]
                 bar_colors = (["#059669"] * len(matched) +
@@ -628,7 +646,7 @@ with mode_tab:
                                "x": 0.5, "xanchor": "center"},
                     )
                     st.plotly_chart(fig_bar, use_container_width=True, config={"displayModeBar": False})
-
+    
         # ── Skill tags ────────────────────────────────────────────────────────
         sk1, sk2 = st.columns(2, gap="large")
         with sk1:
@@ -637,7 +655,7 @@ with mode_tab:
                            for s in matched + [s for s in missing if s in learned])
             st.markdown(f'<div class="tag-wrap">{tags or "<em style=color:#94A3B8>None detected</em>"}</div>',
                         unsafe_allow_html=True)
-
+    
         with sk2:
             st.markdown('<div class="section-title">Skills still to develop</div>', unsafe_allow_html=True)
             remaining_missing = [s for s in missing if s not in learned]
@@ -646,16 +664,16 @@ with mode_tab:
                 st.markdown(f'<div class="tag-wrap">{tags}</div>', unsafe_allow_html=True)
             else:
                 st.success("🎉 You've closed all skill gaps!")
-
+    
         st.markdown("<hr class='divider'>", unsafe_allow_html=True)
-
+    
         # ── Result tabs ───────────────────────────────────────────────────────
         t1, t2, t3, t4, t5, t6, t7, t8 = st.tabs([
             "📅 Learning Plan", "📚 Resources",
             "🎤 Interview Prep", "📝 Resume Tips",
             "🛠 Projects", "🤖 ATS Check", "✉️ Cover Letter", "📥 Export",
         ])
-
+    
         with t1:
             if plan:
                 # Gantt chart — week-by-week learning timeline
@@ -701,7 +719,7 @@ with mode_tab:
                     )
                     st.plotly_chart(fig_gantt, use_container_width=True, config={"displayModeBar": False})
                     st.markdown("<div style='height:.5rem'></div>", unsafe_allow_html=True)
-
+    
                 for step in plan:
                     if isinstance(step, dict):
                         week  = step.get("week", "?")
@@ -710,11 +728,11 @@ with mode_tab:
                         tasks = step.get("tasks", [])
                         proj  = step.get("project", "")
                         done  = skill in learned
-
+    
                         task_html = "".join(f"<li>{t}</li>" for t in tasks)
                         chip      = f'<div class="project-chip">🔨 {proj}</div>' if proj else ""
                         opacity   = "opacity:.45;" if done else ""
-
+    
                         st.markdown(f"""
                         <div class="timeline-item" style="{opacity}">
                           <div class="week-dot">W{week}</div>
@@ -729,7 +747,7 @@ with mode_tab:
                         st.markdown(f"- {step}")
             else:
                 st.info("No learning plan generated.")
-
+    
         with t2:
             if resources:
                 for skill, links in resources.items():
@@ -747,7 +765,7 @@ with mode_tab:
                             </div>""", unsafe_allow_html=True)
             else:
                 st.info("No resources found.")
-
+    
         with t3:
             if interview:
                 for i, q in enumerate(interview, 1):
@@ -757,14 +775,14 @@ with mode_tab:
                     </div>""", unsafe_allow_html=True)
             else:
                 st.info("No interview questions generated.")
-
+    
         with t4:
             if tips:
                 for tip in tips:
                     st.markdown(f'<div class="tip-card">💡 {tip}</div>', unsafe_allow_html=True)
             else:
                 st.info("No resume suggestions generated.")
-
+    
         with t5:
             if projects:
                 for i, proj in enumerate(projects, 1):
@@ -775,22 +793,22 @@ with mode_tab:
                     </div>""", unsafe_allow_html=True)
             else:
                 st.info("No projects generated.")
-
+    
         with t6:
             st.markdown('<div class="section-title">ATS Compatibility Check</div>', unsafe_allow_html=True)
             st.caption("See how well your resume will pass Applicant Tracking Systems before it reaches a human.")
-
+    
             if "ats_report" not in st.session_state:
                 st.session_state.ats_report = None
-
+    
             ats_col, _ = st.columns([1, 3])
             with ats_col:
                 ats_btn = st.button("Run ATS Check", key="run_ats")
-
+    
             if ats_btn:
                 with st.spinner("Analysing ATS compatibility…"):
                     st.session_state.ats_report = check_ats_score(resume_text, job_description)
-
+    
             if st.session_state.ats_report:
                 ar = st.session_state.ats_report
                 ats_score    = ar.get("ats_score", 0)
@@ -801,10 +819,10 @@ with mode_tab:
                 ats_issues   = ar.get("issues", [])
                 ats_tips     = ar.get("suggestions", [])
                 word_count   = ar.get("word_count", 0)
-
+    
                 ats_cls = "green" if ats_score >= 75 else ("yellow" if ats_score >= 50 else "red")
                 ats_label = "ATS Ready" if ats_score >= 75 else ("Needs Work" if ats_score >= 50 else "High Risk")
-
+    
                 # Score cards row
                 ac1, ac2, ac3 = st.columns(3, gap="large")
                 with ac1:
@@ -833,7 +851,7 @@ with mode_tab:
                       <div class="score-sub" style="color:#94A3B8;">{word_count} words</div>
                     </div>""", unsafe_allow_html=True)
                     st.progress(sec_score / 100)
-
+    
                 # ATS gauge chart
                 if _PLOTLY_OK:
                     ats_gauge_color = "#34D399" if ats_score >= 75 else ("#FBBF24" if ats_score >= 50 else "#F87171")
@@ -861,7 +879,7 @@ with mode_tab:
                     gc, _ = st.columns([1, 2])
                     with gc:
                         st.plotly_chart(fig_ats, use_container_width=True, config={"displayModeBar": False})
-
+    
                 # Keywords
                 kw1, kw2 = st.columns(2, gap="large")
                 with kw1:
@@ -878,19 +896,19 @@ with mode_tab:
                         st.markdown(f'<div class="tag-wrap">{tags}</div>', unsafe_allow_html=True)
                     else:
                         st.success("All JD keywords found in your resume!")
-
+    
                 # Issues
                 if ats_issues:
                     st.markdown('<div class="section-title">Issues Detected</div>', unsafe_allow_html=True)
                     for issue in ats_issues:
                         st.markdown(f'<div class="ats-issue">⚠️ {issue}</div>', unsafe_allow_html=True)
-
+    
                 # Suggestions
                 if ats_tips:
                     st.markdown('<div class="section-title">How to Improve</div>', unsafe_allow_html=True)
                     for tip in ats_tips:
                         st.markdown(f'<div class="ats-suggestion">💡 {tip}</div>', unsafe_allow_html=True)
-
+    
             else:
                 st.markdown("""
                 <div class="empty-state">
@@ -898,27 +916,27 @@ with mode_tab:
                   <h3>ATS check not run yet</h3>
                   <p>Click <strong>Run ATS Check</strong> above to analyse your resume.</p>
                 </div>""", unsafe_allow_html=True)
-
+    
         with t7:
             st.markdown('<div class="section-title">Tailored Cover Letter</div>', unsafe_allow_html=True)
             st.caption("AI-generated based on your resume and the job description. Review and personalise before sending.")
-
+    
             if "cover_letter" not in st.session_state:
                 st.session_state.cover_letter = ""
-
+    
             gen_col, _ = st.columns([1, 3])
             with gen_col:
                 gen_btn = st.button("Generate Cover Letter", key="gen_cl")
-
+    
             if gen_btn:
                 with st.spinner("Writing your cover letter…"):
                     st.session_state.cover_letter = generate_cover_letter(
                         resume_text, job_description, matched
                     )
-
+    
             if st.session_state.cover_letter:
                 cl_text = st.session_state.cover_letter
-
+    
                 edited = st.text_area(
                     "Edit before copying",
                     value=cl_text,
@@ -926,7 +944,7 @@ with mode_tab:
                     label_visibility="collapsed",
                     key="cl_edit",
                 )
-
+    
                 dl_col, _ = st.columns([1, 3])
                 with dl_col:
                     st.download_button(
@@ -944,13 +962,13 @@ with mode_tab:
                   <h3>No cover letter yet</h3>
                   <p>Click <strong>Generate Cover Letter</strong> above to create one.</p>
                 </div>""", unsafe_allow_html=True)
-
+    
         with t8:
             st.markdown('<div class="section-title">Download your report</div>', unsafe_allow_html=True)
-
+    
             dl1, dl2 = st.columns(2)
-            candidate_name = uploaded_file.name.replace(".pdf", "") if uploaded_file else "Candidate"
-
+            candidate_name = _r.get("filename", "resume").replace(".pdf", "")
+    
             with dl1:
                 html_report = generate_html_report(report, candidate_name)
                 st.download_button(
@@ -961,7 +979,7 @@ with mode_tab:
                     use_container_width=True,
                 )
                 st.caption("Open in browser → Print → Save as PDF")
-
+    
             with dl2:
                 st.download_button(
                     "📦 Download JSON Report",
@@ -971,7 +989,7 @@ with mode_tab:
                     use_container_width=True,
                 )
                 st.caption("Raw data for integration or backup")
-
+    
     else:
         st.markdown("""
         <div class="empty-state">
