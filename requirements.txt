@@ -19,4 +19,4 @@ duckduckgo-search
 fpdf2
 beautifulsoup4
 requests
-plotly
+plotly>=5.18.0
