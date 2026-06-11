@@ -22,7 +22,7 @@ from langchain_community.document_loaders import Docx2txtLoader, PyPDFLoader, Te
 from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_community.embeddings import FastEmbedEmbeddings
 
 try:
     from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -56,7 +56,7 @@ class MultiTenantIngestionPipeline:
     CHILD_CHUNK_SIZE = 300
     CHILD_CHUNK_OVERLAP = 50
     DEFAULT_EMBEDDING_DIMENSION = 384
-    DEFAULT_EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+    DEFAULT_EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"
     SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".txt"}
 
     def __init__(
@@ -103,7 +103,7 @@ class MultiTenantIngestionPipeline:
             or os.getenv("EMBEDDING_MODEL")
             or self.DEFAULT_EMBEDDING_MODEL
         )
-        self.embeddings = embeddings or HuggingFaceEmbeddings(
+        self.embeddings = embeddings or FastEmbedEmbeddings(
             model_name=self.embedding_model
         )
         logger.info("🧠 Embeddings initialized: %s", self.embedding_model)
