@@ -8,6 +8,7 @@ except ImportError:
     _PLOTLY_OK = False
 
 from analyzer import (
+    check_ats_score,
     extract_text_from_pdf,
     generate_cover_letter,
     get_ai_analysis,
@@ -270,6 +271,53 @@ st.markdown("""
     background:linear-gradient(135deg,#052E16,#064E3B);
     border-color:#059669; color:#6EE7B7;
     box-shadow:0 0 10px #05966922;
+  }
+
+  /* ── ATS ── */
+  .ats-issue {
+    background:linear-gradient(135deg,#2D0A0A,#1A0808);
+    border-left:3px solid #DC2626; border-radius:0 10px 10px 0;
+    padding:.65rem 1rem; margin-bottom:.4rem; font-size:.86rem; color:#FCA5A5;
+  }
+  .ats-suggestion {
+    background:linear-gradient(135deg,#0F1E3A,#0A1628);
+    border-left:3px solid #3B82F6; border-radius:0 10px 10px 0;
+    padding:.65rem 1rem; margin-bottom:.4rem; font-size:.86rem; color:#93C5FD;
+  }
+
+  /* ── Mobile sidebar toggle ── */
+  [data-testid="collapsedControl"] {
+    background:linear-gradient(135deg,#1E293B,#162032) !important;
+    border:1px solid #3B82F6 !important; border-radius:0 8px 8px 0 !important;
+    color:#60A5FA !important; width:28px !important;
+    box-shadow:2px 0 12px #3B82F630 !important;
+  }
+
+  /* ── Mobile responsive ── */
+  @media (max-width: 768px) {
+    .hero { padding:1rem 0 1.4rem; }
+    .hero h1 { font-size:1.5rem !important; }
+    .hero p  { font-size:.85rem; }
+    .hero-badge { font-size:.6rem; }
+
+    .score-number  { font-size:2.2rem !important; }
+    .score-card    { padding:1rem .7rem; }
+    .compare-score { font-size:1.8rem !important; }
+
+    .main .block-container {
+      padding-left:.6rem !important;
+      padding-right:.6rem !important;
+    }
+
+    .tag { font-size:.72rem; padding:4px 10px; }
+
+    .section-title { font-size:.62rem; }
+
+    .timeline-item { gap:.6rem; }
+    .week-dot { width:30px; height:30px; font-size:.62rem; }
+
+    .resource-card { flex-wrap:wrap; }
+    .interview-q   { font-size:.82rem; }
   }
 </style>
 """, unsafe_allow_html=True)
@@ -602,10 +650,10 @@ with mode_tab:
         st.markdown("<hr class='divider'>", unsafe_allow_html=True)
 
         # ── Result tabs ───────────────────────────────────────────────────────
-        t1, t2, t3, t4, t5, t6, t7 = st.tabs([
+        t1, t2, t3, t4, t5, t6, t7, t8 = st.tabs([
             "📅 Learning Plan", "📚 Resources",
             "🎤 Interview Prep", "📝 Resume Tips",
-            "🛠 Projects", "✉️ Cover Letter", "📥 Export",
+            "🛠 Projects", "🤖 ATS Check", "✉️ Cover Letter", "📥 Export",
         ])
 
         with t1:
@@ -729,6 +777,129 @@ with mode_tab:
                 st.info("No projects generated.")
 
         with t6:
+            st.markdown('<div class="section-title">ATS Compatibility Check</div>', unsafe_allow_html=True)
+            st.caption("See how well your resume will pass Applicant Tracking Systems before it reaches a human.")
+
+            if "ats_report" not in st.session_state:
+                st.session_state.ats_report = None
+
+            ats_col, _ = st.columns([1, 3])
+            with ats_col:
+                ats_btn = st.button("Run ATS Check", key="run_ats")
+
+            if ats_btn:
+                with st.spinner("Analysing ATS compatibility…"):
+                    st.session_state.ats_report = check_ats_score(resume_text, job_description)
+
+            if st.session_state.ats_report:
+                ar = st.session_state.ats_report
+                ats_score    = ar.get("ats_score", 0)
+                kw_score     = ar.get("keyword_score", 0)
+                sec_score    = ar.get("section_score", 0)
+                kw_found     = ar.get("keywords_found", [])
+                kw_missing   = ar.get("keywords_missing", [])
+                ats_issues   = ar.get("issues", [])
+                ats_tips     = ar.get("suggestions", [])
+                word_count   = ar.get("word_count", 0)
+
+                ats_cls = "green" if ats_score >= 75 else ("yellow" if ats_score >= 50 else "red")
+                ats_label = "ATS Ready" if ats_score >= 75 else ("Needs Work" if ats_score >= 50 else "High Risk")
+
+                # Score cards row
+                ac1, ac2, ac3 = st.columns(3, gap="large")
+                with ac1:
+                    st.markdown(f"""
+                    <div class="score-card">
+                      <div class="score-label">ATS Score</div>
+                      <div class="score-number {ats_cls}">{ats_score}%</div>
+                      <div class="score-sub {ats_cls}">{ats_label}</div>
+                    </div>""", unsafe_allow_html=True)
+                    st.progress(ats_score / 100)
+                with ac2:
+                    kw_cls = "green" if kw_score >= 70 else ("yellow" if kw_score >= 40 else "red")
+                    st.markdown(f"""
+                    <div class="score-card">
+                      <div class="score-label">Keyword Match</div>
+                      <div class="score-number {kw_cls}">{kw_score}%</div>
+                      <div class="score-sub" style="color:#94A3B8;">{len(kw_found)} of {len(kw_found)+len(kw_missing)} JD skills</div>
+                    </div>""", unsafe_allow_html=True)
+                    st.progress(kw_score / 100)
+                with ac3:
+                    sec_cls = "green" if sec_score >= 75 else ("yellow" if sec_score >= 50 else "red")
+                    st.markdown(f"""
+                    <div class="score-card">
+                      <div class="score-label">Structure Score</div>
+                      <div class="score-number {sec_cls}">{sec_score}%</div>
+                      <div class="score-sub" style="color:#94A3B8;">{word_count} words</div>
+                    </div>""", unsafe_allow_html=True)
+                    st.progress(sec_score / 100)
+
+                # ATS gauge chart
+                if _PLOTLY_OK:
+                    ats_gauge_color = "#34D399" if ats_score >= 75 else ("#FBBF24" if ats_score >= 50 else "#F87171")
+                    fig_ats = go.Figure(go.Indicator(
+                        mode="gauge+number",
+                        value=ats_score,
+                        number={"suffix": "%", "font": {"size": 36, "color": "#E2E8F0"}},
+                        gauge={
+                            "axis": {"range": [0, 100], "tickcolor": "#8899AA",
+                                     "tickfont": {"color": "#8899AA", "size": 10}},
+                            "bar": {"color": ats_gauge_color, "thickness": 0.28},
+                            "bgcolor": "#0D1220", "borderwidth": 0,
+                            "steps": [
+                                {"range": [0,  50], "color": "#2D0A0A"},
+                                {"range": [50, 75], "color": "#1C1205"},
+                                {"range": [75, 100], "color": "#052E16"},
+                            ],
+                        },
+                    ))
+                    fig_ats.update_layout(
+                        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                        font={"color": "#E2E8F0"}, height=200,
+                        margin=dict(l=20, r=20, t=20, b=10),
+                    )
+                    gc, _ = st.columns([1, 2])
+                    with gc:
+                        st.plotly_chart(fig_ats, use_container_width=True, config={"displayModeBar": False})
+
+                # Keywords
+                kw1, kw2 = st.columns(2, gap="large")
+                with kw1:
+                    st.markdown('<div class="section-title">Keywords Found</div>', unsafe_allow_html=True)
+                    if kw_found:
+                        tags = "".join(f'<span class="tag tag-green">{k}</span>' for k in kw_found)
+                        st.markdown(f'<div class="tag-wrap">{tags}</div>', unsafe_allow_html=True)
+                    else:
+                        st.caption("No matching keywords detected.")
+                with kw2:
+                    st.markdown('<div class="section-title">Keywords Missing from JD</div>', unsafe_allow_html=True)
+                    if kw_missing:
+                        tags = "".join(f'<span class="tag tag-red">{k}</span>' for k in kw_missing)
+                        st.markdown(f'<div class="tag-wrap">{tags}</div>', unsafe_allow_html=True)
+                    else:
+                        st.success("All JD keywords found in your resume!")
+
+                # Issues
+                if ats_issues:
+                    st.markdown('<div class="section-title">Issues Detected</div>', unsafe_allow_html=True)
+                    for issue in ats_issues:
+                        st.markdown(f'<div class="ats-issue">⚠️ {issue}</div>', unsafe_allow_html=True)
+
+                # Suggestions
+                if ats_tips:
+                    st.markdown('<div class="section-title">How to Improve</div>', unsafe_allow_html=True)
+                    for tip in ats_tips:
+                        st.markdown(f'<div class="ats-suggestion">💡 {tip}</div>', unsafe_allow_html=True)
+
+            else:
+                st.markdown("""
+                <div class="empty-state">
+                  <div class="icon">🤖</div>
+                  <h3>ATS check not run yet</h3>
+                  <p>Click <strong>Run ATS Check</strong> above to analyse your resume.</p>
+                </div>""", unsafe_allow_html=True)
+
+        with t7:
             st.markdown('<div class="section-title">Tailored Cover Letter</div>', unsafe_allow_html=True)
             st.caption("AI-generated based on your resume and the job description. Review and personalise before sending.")
 
@@ -748,7 +919,6 @@ with mode_tab:
             if st.session_state.cover_letter:
                 cl_text = st.session_state.cover_letter
 
-                # Editable text area so the user can tweak inline
                 edited = st.text_area(
                     "Edit before copying",
                     value=cl_text,
@@ -775,7 +945,7 @@ with mode_tab:
                   <p>Click <strong>Generate Cover Letter</strong> above to create one.</p>
                 </div>""", unsafe_allow_html=True)
 
-        with t7:
+        with t8:
             st.markdown('<div class="section-title">Download your report</div>', unsafe_allow_html=True)
 
             dl1, dl2 = st.columns(2)

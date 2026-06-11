@@ -345,6 +345,126 @@ Return ONLY a JSON array of 5 suggestion strings (no markdown):
         ]
 
 
+# ── ATS Score Checker ────────────────────────────────────────────────────────
+
+_ATS_SECTIONS = {
+    "Contact Info":  r"[\w.+-]+@[\w-]+\.[a-z]{2,}|\+?\d[\d\s\-()]{7,}",
+    "LinkedIn":      r"linkedin\.com/in/",
+    "Education":     r"\b(education|university|college|degree|bachelor|master|b\.?tech|m\.?tech|b\.?sc|m\.?sc|gpa)\b",
+    "Experience":    r"\b(experience|work history|employment|internship|intern at|worked at|job)\b",
+    "Skills":        r"\b(skills|technical skills|technologies|proficiencies|competencies)\b",
+    "Projects":      r"\b(projects?|portfolio|built|developed|created|implemented)\b",
+    "Achievements":  r"\d+\s*(%|percent|users?|customers?|ms\b|x\b|times?|hours?|days?|months?)",
+}
+
+_ATS_ACTION_VERBS = [
+    "developed","built","designed","implemented","led","managed","created","improved",
+    "increased","reduced","optimised","optimized","delivered","launched","automated",
+    "architected","analysed","analyzed","collaborated","deployed","maintained",
+]
+
+
+def _ats_local(resume_text: str, jd_text: str) -> dict:
+    """Fast regex-based ATS checks — no API call."""
+    text_lower = resume_text.lower()
+
+    # Section presence
+    section_hits = {s: bool(re.search(p, resume_text, re.IGNORECASE))
+                    for s, p in _ATS_SECTIONS.items()}
+    section_score = round(sum(section_hits.values()) / len(section_hits) * 100)
+
+    # Keyword match (skills from JD vs resume)
+    jd_skills   = {s for s, p in _SKILL_PATTERNS.items() if re.search(p, jd_text, re.IGNORECASE)}
+    resume_skills = {s for s, p in _SKILL_PATTERNS.items() if re.search(p, resume_text, re.IGNORECASE)}
+    kw_found   = sorted(jd_skills & resume_skills)
+    kw_missing = sorted(jd_skills - resume_skills)
+    kw_score   = round(len(kw_found) / len(jd_skills) * 100) if jd_skills else 50
+
+    # Action verbs
+    verb_count = sum(1 for v in _ATS_ACTION_VERBS if v in text_lower)
+    verb_score = min(100, verb_count * 12)
+
+    # Word count
+    word_count = len(resume_text.split())
+    length_ok  = 200 <= word_count <= 900
+
+    # Build issues list
+    issues = []
+    if not section_hits["Contact Info"]:
+        issues.append("No email or phone number detected — ATS cannot contact you")
+    if not section_hits["LinkedIn"]:
+        issues.append("LinkedIn URL missing — many ATS and recruiters check this")
+    if not section_hits["Education"]:
+        issues.append("Education section not clearly labelled")
+    if not section_hits["Experience"]:
+        issues.append("Experience section not clearly labelled")
+    if not section_hits["Skills"]:
+        issues.append("No dedicated Skills section — ATS may miss your tech stack")
+    if not section_hits["Achievements"]:
+        issues.append("No quantified achievements found (add numbers, %, impact metrics)")
+    if verb_count < 3:
+        issues.append("Too few strong action verbs — use 'built', 'led', 'improved', etc.")
+    if not length_ok:
+        issues.append(
+            "Resume too short (under 200 words)" if word_count < 200
+            else "Resume may be too long for a 1-page ATS parse (over 900 words)"
+        )
+
+    # Overall ATS score (weighted)
+    ats_score = round(kw_score * 0.40 + section_score * 0.35 + verb_score * 0.25)
+
+    return {
+        "ats_score":      ats_score,
+        "keyword_score":  kw_score,
+        "section_score":  section_score,
+        "keywords_found": kw_found,
+        "keywords_missing": kw_missing,
+        "issues":         issues,
+        "word_count":     word_count,
+    }
+
+
+def check_ats_score(resume_text: str, job_description: str) -> dict:
+    """Return ATS compatibility report (local checks + LLM suggestions)."""
+    local = _ats_local(resume_text, job_description)
+
+    # LLM for specific, actionable suggestions
+    suggestions = []
+    try:
+        model = _llm()
+        prompt = f"""You are an ATS (Applicant Tracking System) expert.
+Review this resume against the job description and provide 5 specific, actionable suggestions
+to improve ATS compatibility. Be concise — one sentence per suggestion.
+
+RESUME (excerpt):
+{resume_text[:1800]}
+
+JOB DESCRIPTION (excerpt):
+{job_description[:800]}
+
+KNOWN ISSUES: {', '.join(local['issues'][:4]) if local['issues'] else 'none detected'}
+
+Return ONLY a JSON array of 5 suggestion strings:
+["Suggestion 1", "Suggestion 2", "Suggestion 3", "Suggestion 4", "Suggestion 5"]"""
+
+        raw = model.invoke(prompt).content
+        cleaned = re.sub(r"```(?:json)?", "", raw).replace("```", "").strip()
+        arr = re.search(r"\[.*\]", cleaned, re.DOTALL)
+        if arr:
+            suggestions = json.loads(arr.group())
+    except Exception as e:
+        logger.warning("ATS LLM suggestions failed: %s", e)
+        suggestions = [
+            "Add measurable impact metrics (numbers, %, scale) to every bullet point.",
+            f"Include these missing keywords from the JD: {', '.join(local['keywords_missing'][:4])}." if local['keywords_missing'] else "Mirror the exact job title and key phrases from the JD in your summary.",
+            "Use standard section headings: Education, Experience, Skills, Projects.",
+            "Add your LinkedIn URL and GitHub profile link.",
+            "Keep resume to one page; prioritise most recent and relevant experience.",
+        ]
+
+    return {**local, "suggestions": suggestions}
+
+
 # ── Cover Letter ─────────────────────────────────────────────────────────────
 
 def generate_cover_letter(resume_text: str, job_description: str, matched_skills: list) -> str:
