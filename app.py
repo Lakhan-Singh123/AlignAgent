@@ -11,12 +11,13 @@ from analyzer import (
     check_ats_score,
     extract_text_from_pdf,
     generate_cover_letter,
+    generate_tailored_resume,
     get_ai_analysis,
     get_interview_questions,
     get_resume_suggestions,
     scrape_jd_from_url,
 )
-from export import generate_html_report, generate_json_bytes
+from export import generate_html_report, generate_json_bytes, generate_resume_pdf
 from progress import (
     effective_score,
     get_all_missing,
@@ -668,10 +669,11 @@ with mode_tab:
         st.markdown("<hr class='divider'>", unsafe_allow_html=True)
     
         # ── Result tabs ───────────────────────────────────────────────────────
-        t1, t2, t3, t4, t5, t6, t7, t8 = st.tabs([
+        t1, t2, t3, t4, t5, t6, t7, t8, t9 = st.tabs([
             "📅 Learning Plan", "📚 Resources",
             "🎤 Interview Prep", "📝 Resume Tips",
-            "🛠 Projects", "🤖 ATS Check", "✉️ Cover Letter", "📥 Export",
+            "🛠 Projects", "🤖 ATS Check", "✉️ Cover Letter",
+            "📄 Resume Builder", "📥 Export",
         ])
     
         with t1:
@@ -964,6 +966,102 @@ with mode_tab:
                 </div>""", unsafe_allow_html=True)
     
         with t8:
+            st.markdown('<div class="section-title">AI Resume Builder</div>', unsafe_allow_html=True)
+            st.caption("Rewrites your resume content to be tailored and optimised for this specific job. Your original data is never changed.")
+
+            if "resume_data" not in st.session_state:
+                st.session_state.resume_data = None
+
+            rb_col, _ = st.columns([1, 3])
+            with rb_col:
+                rb_btn = st.button("Generate Tailored Resume", key="gen_resume")
+
+            if rb_btn:
+                with st.spinner("Rewriting your resume for this role… (~30s)"):
+                    st.session_state.resume_data = generate_tailored_resume(
+                        resume_text, job_description, matched, missing
+                    )
+
+            if st.session_state.resume_data:
+                rd = st.session_state.resume_data
+
+                # Preview — editable fields
+                st.markdown('<div class="section-title">Preview & Edit</div>', unsafe_allow_html=True)
+                st.caption("Edit any field below before downloading.")
+
+                pc1, pc2 = st.columns(2, gap="large")
+                with pc1:
+                    rd["name"]     = st.text_input("Full Name",     value=rd.get("name", ""),     key="rb_name")
+                    rd["email"]    = st.text_input("Email",          value=rd.get("email", ""),    key="rb_email")
+                    rd["phone"]    = st.text_input("Phone",          value=rd.get("phone", ""),    key="rb_phone")
+                with pc2:
+                    rd["linkedin"] = st.text_input("LinkedIn URL",   value=rd.get("linkedin", ""), key="rb_linkedin")
+                    rd["github"]   = st.text_input("GitHub URL",     value=rd.get("github", ""),   key="rb_github")
+
+                rd["summary"] = st.text_area(
+                    "Professional Summary",
+                    value=rd.get("summary", ""),
+                    height=100,
+                    key="rb_summary",
+                )
+
+                # Skills — comma-editable
+                skills_str = st.text_input(
+                    "Skills (comma-separated)",
+                    value=", ".join(rd.get("skills", [])),
+                    key="rb_skills",
+                )
+                rd["skills"] = [s.strip() for s in skills_str.split(",") if s.strip()]
+
+                # Experience bullets — one text area per job
+                st.markdown('<div class="section-title">Experience</div>', unsafe_allow_html=True)
+                for idx, job in enumerate(rd.get("experience", [])):
+                    with st.expander(f"{job.get('title','')} — {job.get('company','')}  |  {job.get('duration','')}"):
+                        bullets_text = st.text_area(
+                            "Bullets (one per line)",
+                            value="\n".join(job.get("bullets", [])),
+                            height=120,
+                            key=f"rb_bullets_{idx}",
+                        )
+                        job["bullets"] = [b.strip() for b in bullets_text.splitlines() if b.strip()]
+
+                # Download
+                st.markdown('<div class="section-title">Download</div>', unsafe_allow_html=True)
+                dl1, dl2, _ = st.columns([1, 1, 2], gap="medium")
+                try:
+                    pdf_bytes = generate_resume_pdf(rd)
+                    with dl1:
+                        st.download_button(
+                            "📄 Download PDF",
+                            data=pdf_bytes,
+                            file_name="tailored_resume.pdf",
+                            mime="application/pdf",
+                            use_container_width=True,
+                        )
+                except Exception as e:
+                    st.error(f"PDF generation failed: {e}")
+
+                with dl2:
+                    import json as _json2
+                    st.download_button(
+                        "📦 Download JSON",
+                        data=_json2.dumps(rd, indent=2).encode(),
+                        file_name="tailored_resume.json",
+                        mime="application/json",
+                        use_container_width=True,
+                    )
+
+                st.caption("PDF tip: open in browser → File → Print → Save as PDF for best quality.")
+
+            else:
+                st.markdown("""
+                <div class="empty-state">
+                  <div class="icon">📄</div>
+                  <h3>No resume generated yet</h3>
+                  <p>Click <strong>Generate Tailored Resume</strong> above to create a job-specific version of your resume.</p>
+                </div>""", unsafe_allow_html=True)
+
+        with t9:
             st.markdown('<div class="section-title">Download your report</div>', unsafe_allow_html=True)
     
             dl1, dl2 = st.columns(2)

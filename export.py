@@ -1,8 +1,9 @@
-"""Report export utilities — HTML (print-to-PDF) and JSON download."""
+"""Report export utilities — HTML (print-to-PDF), JSON download, resume PDF."""
 
 from __future__ import annotations
 
 import json
+import re
 from datetime import date
 
 
@@ -140,3 +141,162 @@ def generate_html_report(report: dict, candidate_name: str = "Candidate") -> str
 
 def generate_json_bytes(report: dict) -> bytes:
     return json.dumps(report, indent=2, ensure_ascii=False).encode("utf-8")
+
+
+def _safe(text: str) -> str:
+    """Strip non-latin characters that fpdf core fonts can't render."""
+    return re.sub(r"[^\x00-\xFF]", "", str(text or ""))
+
+
+def generate_resume_pdf(data: dict) -> bytes:
+    """Build a clean, ATS-friendly resume PDF from structured resume data."""
+    from fpdf import FPDF
+
+    C_DARK  = (17,  24,  39)
+    C_BLUE  = (37,  99, 235)
+    C_GRAY  = (107, 114, 128)
+    C_LINE  = (209, 213, 219)
+
+    pdf = FPDF(orientation="P", unit="mm", format="A4")
+    pdf.set_margins(16, 14, 16)
+    pdf.set_auto_page_break(auto=True, margin=14)
+    pdf.add_page()
+
+    def rgb(c):
+        return c[0], c[1], c[2]
+
+    def rule(color=C_LINE, thickness=0.25):
+        pdf.set_draw_color(*rgb(color))
+        pdf.set_line_width(thickness)
+        pdf.line(16, pdf.get_y(), 194, pdf.get_y())
+
+    def section(title: str):
+        pdf.ln(3)
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.set_text_color(*rgb(C_BLUE))
+        pdf.cell(0, 5, title.upper(), ln=True)
+        rule(C_BLUE, 0.4)
+        pdf.ln(2)
+
+    # ── Name ──────────────────────────────────────────────────────────────────
+    name = _safe(data.get("name", "Your Name"))
+    pdf.set_font("Helvetica", "B", 20)
+    pdf.set_text_color(*rgb(C_DARK))
+    pdf.cell(0, 10, name, ln=True, align="C")
+
+    # ── Contact line ──────────────────────────────────────────────────────────
+    contact_parts = [
+        data.get("email", ""), data.get("phone", ""),
+        data.get("linkedin", ""), data.get("github", ""),
+    ]
+    contact_str = _safe("   |   ".join(p for p in contact_parts if p))
+    if contact_str.strip():
+        pdf.set_font("Helvetica", "", 8.5)
+        pdf.set_text_color(*rgb(C_GRAY))
+        pdf.cell(0, 5, contact_str, ln=True, align="C")
+
+    pdf.ln(1)
+    rule(C_DARK, 0.6)
+    pdf.ln(1)
+
+    # ── Summary ───────────────────────────────────────────────────────────────
+    summary = _safe(data.get("summary", ""))
+    pw = pdf.w - pdf.l_margin - pdf.r_margin  # effective page width
+
+    if summary:
+        section("Professional Summary")
+        pdf.set_font("Helvetica", "", 9.5)
+        pdf.set_text_color(*rgb(C_DARK))
+        pdf.multi_cell(pw, 5, summary)
+
+    # ── Experience ────────────────────────────────────────────────────────────
+    experience = data.get("experience", [])
+    if experience:
+        section("Experience")
+        for job in experience:
+            title_str   = _safe(job.get("title", ""))
+            company_str = _safe(job.get("company", ""))
+            duration    = _safe(job.get("duration", ""))
+
+            # Role + company (left) | duration (right)
+            pdf.set_font("Helvetica", "B", 10)
+            pdf.set_text_color(*rgb(C_DARK))
+            role_text = f"{title_str}  -  {company_str}" if company_str else title_str
+            pdf.cell(0, 5.5, role_text, ln=False)
+            if duration:
+                pdf.set_font("Helvetica", "", 8.5)
+                pdf.set_text_color(*rgb(C_GRAY))
+                pdf.cell(0, 5.5, duration, ln=True, align="R")
+            else:
+                pdf.ln()
+
+            # Bullets
+            indent = 5
+            bw = pdf.w - pdf.l_margin - pdf.r_margin - indent
+            for bullet in job.get("bullets", []):
+                clean = _safe(bullet).lstrip("-").lstrip("*").lstrip("•").strip()
+                if clean:
+                    pdf.set_font("Helvetica", "", 9.5)
+                    pdf.set_text_color(*rgb(C_DARK))
+                    pdf.set_x(pdf.l_margin + indent)
+                    pdf.multi_cell(bw, 5, f"- {clean}")
+            pdf.ln(1.5)
+
+    # ── Skills ────────────────────────────────────────────────────────────────
+    skills = data.get("skills", [])
+    if skills:
+        section("Skills")
+        pdf.set_font("Helvetica", "", 9.5)
+        pdf.set_text_color(*rgb(C_DARK))
+        # Wrap skills into rows of ~6
+        row_size = 6
+        for i in range(0, len(skills), row_size):
+            row = "   |   ".join(_safe(s) for s in skills[i:i + row_size])
+            pdf.cell(0, 5, row, ln=True)
+        pdf.ln(1)
+
+    # ── Education ─────────────────────────────────────────────────────────────
+    education = data.get("education", [])
+    if education:
+        section("Education")
+        for edu in education:
+            degree      = _safe(edu.get("degree", ""))
+            institution = _safe(edu.get("institution", ""))
+            year        = _safe(edu.get("year", ""))
+
+            pdf.set_font("Helvetica", "B", 10)
+            pdf.set_text_color(*rgb(C_DARK))
+            pdf.cell(0, 5.5, degree, ln=False)
+            if year:
+                pdf.set_font("Helvetica", "", 8.5)
+                pdf.set_text_color(*rgb(C_GRAY))
+                pdf.cell(0, 5.5, year, ln=True, align="R")
+            else:
+                pdf.ln()
+
+            if institution:
+                pdf.set_font("Helvetica", "", 9)
+                pdf.set_text_color(*rgb(C_GRAY))
+                pdf.cell(0, 5, institution, ln=True)
+            pdf.ln(1)
+
+    # ── Projects ──────────────────────────────────────────────────────────────
+    projects = data.get("projects", [])
+    if projects:
+        section("Projects")
+        for proj in projects:
+            pname = _safe(proj.get("name", ""))
+            pdesc = _safe(proj.get("description", ""))
+            if pname:
+                pdf.set_font("Helvetica", "B", 9.5)
+                pdf.set_text_color(*rgb(C_DARK))
+                pdf.cell(0, 5, pname, ln=False)
+                if pdesc:
+                    pdf.set_font("Helvetica", "", 9.5)
+                    pdf.set_text_color(*rgb(C_DARK))
+                    pdf.multi_cell(pw, 5, f"  -  {pdesc}")
+                else:
+                    pdf.ln()
+                pdf.ln(1)
+
+    return bytes(pdf.output())

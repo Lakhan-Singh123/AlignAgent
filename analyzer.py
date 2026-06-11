@@ -345,6 +345,90 @@ Return ONLY a JSON array of 5 suggestion strings (no markdown):
         ]
 
 
+# ── Resume Builder ───────────────────────────────────────────────────────────
+
+def generate_tailored_resume(
+    resume_text: str,
+    job_description: str,
+    matched_skills: list,
+    missing_skills: list,
+) -> dict:
+    """Rewrite the resume as structured JSON tailored to the job description."""
+    model = _llm()
+    highlight = ", ".join((matched_skills + missing_skills)[:10])
+
+    prompt = f"""You are a professional resume writer. Rewrite and improve the resume below
+to be perfectly tailored for the job description.
+
+ORIGINAL RESUME:
+{resume_text[:2500]}
+
+JOB DESCRIPTION:
+{job_description[:1000]}
+
+SKILLS TO HIGHLIGHT: {highlight}
+
+Rules:
+- Keep all real information — do NOT invent companies, degrees, or dates
+- Rewrite experience bullets: start with strong action verbs, add numbers/impact where possible
+- Tailor the professional summary specifically to this role (2-3 sentences)
+- Reorder skills so the most JD-relevant appear first
+- If no contact field is found, leave it as an empty string
+
+Return ONLY valid JSON — no markdown fences, no extra text:
+{{
+  "name": "full name",
+  "email": "email or empty string",
+  "phone": "phone or empty string",
+  "linkedin": "linkedin url or empty string",
+  "github": "github url or empty string",
+  "summary": "tailored 2-3 sentence professional summary",
+  "experience": [
+    {{
+      "title": "job title",
+      "company": "company name",
+      "duration": "date range",
+      "bullets": ["Strong action-verb bullet with impact", "Another rewritten bullet"]
+    }}
+  ],
+  "skills": ["Skill1", "Skill2"],
+  "education": [
+    {{
+      "degree": "degree name",
+      "institution": "institution name",
+      "year": "year"
+    }}
+  ],
+  "projects": [
+    {{
+      "name": "project name",
+      "description": "one-line description with tech and impact"
+    }}
+  ]
+}}"""
+
+    try:
+        raw = model.invoke(prompt).content
+        cleaned = re.sub(r"```(?:json)?", "", raw).replace("```", "").strip()
+        match = re.search(r"\{.*\}", cleaned, re.DOTALL)
+        data = json.loads(match.group() if match else cleaned)
+        logger.info("✅ Tailored resume generated.")
+        return data
+    except Exception as e:
+        logger.warning("Resume generation failed: %s", e)
+        # Minimal fallback — keep name + skills only
+        first_line = resume_text.strip().splitlines()[0] if resume_text.strip() else "Your Name"
+        return {
+            "name": first_line,
+            "email": "", "phone": "", "linkedin": "", "github": "",
+            "summary": f"Experienced professional with skills in {', '.join(matched_skills[:5])}.",
+            "experience": [],
+            "skills": matched_skills[:12],
+            "education": [],
+            "projects": [],
+        }
+
+
 # ── ATS Score Checker ────────────────────────────────────────────────────────
 
 _ATS_SECTIONS = {
