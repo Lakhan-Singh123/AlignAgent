@@ -296,7 +296,7 @@ with st.sidebar:
 
     st.markdown("<hr style='border-color:#1E2A3A;margin:1rem 0'>", unsafe_allow_html=True)
     st.markdown("#### ℹ️ About")
-    st.caption("Powered by **Ollama** (local, free). No data leaves your machine.")
+    st.caption("Powered by **Groq** (llama-3.3-70b). Fast, free tier.")
 
 
 # ── Hero ──────────────────────────────────────────────────────────────────────
@@ -400,6 +400,7 @@ with mode_tab:
 
             with st.spinner("Running deep agentic analysis…"):
                 final_state = {}
+                uploaded_file.seek(0)  # extract_text_from_pdf already consumed the stream
                 for event in run_agentic_analysis(
                     uploaded_file.read(), uploaded_file.name, job_description
                 ):
