@@ -1,9 +1,20 @@
 import json
+import os
 import shutil
 from datetime import datetime, timedelta
 from pathlib import Path
 
 import streamlit as st
+
+# ── Streamlit Cloud: bridge st.secrets → os.environ so all modules can use
+# os.getenv() regardless of whether we're running locally (.env) or in the cloud.
+for _key in ["GROQ_API_KEY", "GROQ_MODEL", "EMBEDDING_MODEL"]:
+    if _key in st.secrets and _key not in os.environ:
+        os.environ[_key] = st.secrets[_key]
+
+# Ensure required directories exist (not committed to git, must be created at runtime)
+Path("reports").mkdir(exist_ok=True)
+Path("workspaces").mkdir(exist_ok=True)
 
 try:
     import plotly.graph_objects as go

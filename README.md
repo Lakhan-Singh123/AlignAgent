@@ -111,7 +111,24 @@ python ingest_workspace.py --workspace internship_demo --path sample_docs/intern
 
 ---
 
-## Run
+## Deploy to Streamlit Cloud (free)
+
+1. Push this repo to GitHub (already done).
+2. Go to [share.streamlit.io](https://share.streamlit.io) → **New app** → select your repo → set **Main file path** to `app.py`.
+3. Open **Advanced settings → Secrets** and paste:
+
+```toml
+GROQ_API_KEY = "your_groq_api_key_here"
+GROQ_MODEL = "llama-3.3-70b-versatile"
+```
+
+4. Click **Deploy**. Streamlit Cloud will install Python packages from `requirements.txt` and system packages (Tesseract, Poppler) from `packages.txt` automatically.
+
+> The deep agentic mode creates and destroys FAISS workspaces per-session in temp storage — no persistent disk setup needed.
+
+---
+
+## Run locally
 
 ### Streamlit UI (recommended)
 

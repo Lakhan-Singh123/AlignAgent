@@ -1,2 +1,4 @@
 libopenblas-dev
 libgomp1
+tesseract-ocr
+poppler-utils
