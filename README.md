@@ -2,7 +2,7 @@
 
 An **agentic RAG** system that analyses your resume against a job description and produces a full skill gap report — complete with a week-by-week learning plan, real learning resources, interview prep questions, and resume improvement suggestions.
 
-Runs **100% locally and free** using Ollama. No API keys required.
+Uses **Groq's free API** for the LLM and local FastEmbed for embeddings. Requires a free Groq API key.
 
 ---
 
@@ -47,9 +47,9 @@ Save report
 
 | Layer | Technology |
 |---|---|
-| LLM | Ollama — `llama3.2` (local, free) |
-| Embeddings | Ollama — `nomic-embed-text` (768-dim) |
-| Vector store | FAISS |
+| LLM | Groq API — `llama-3.3-70b-versatile` (free tier) |
+| Embeddings | FastEmbed — `BAAI/bge-small-en-v1.5` (384-dim, local) |
+| Vector store | FAISS (local) |
 | RAG framework | LangChain + LangGraph |
 | Agentic graph | LangGraph (8 nodes, conditional edges, retry loops) |
 | UI | Streamlit |
@@ -59,18 +59,11 @@ Save report
 
 ## Setup
 
-### 1. Install Ollama
+### 1. Get a free Groq API key
 
-Download from [ollama.com](https://ollama.com) and install the desktop app.
+Sign up at [console.groq.com](https://console.groq.com) and create an API key. The free tier is sufficient.
 
-### 2. Pull the required models
-
-```bash
-ollama pull llama3.2
-ollama pull nomic-embed-text
-```
-
-### 3. Clone and install dependencies
+### 2. Clone and install dependencies
 
 ```bash
 git clone https://github.com/YOUR_USERNAME/AlignAgent.git
@@ -78,21 +71,20 @@ cd AlignAgent
 pip install -r requirements.txt
 ```
 
-### 4. Set up environment
+### 3. Set up environment
 
 ```bash
 cp .env.example .env
 ```
 
-The default `.env` works out of the box with Ollama:
+Edit `.env` and add your Groq API key:
 
 ```
-OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=llama3.2
-OLLAMA_EMBEDDING_MODEL=nomic-embed-text
+GROQ_API_KEY=your_groq_api_key_here
+GROQ_MODEL=llama-3.3-70b-versatile
 ```
 
-### 5. Ingest sample documents
+### 4. Ingest sample documents
 
 ```bash
 python ingest_workspace.py --workspace candidate_demo --path sample_docs/resume.txt

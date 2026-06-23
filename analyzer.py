@@ -10,7 +10,7 @@ except ImportError as e:
     raise ImportError(
         "langchain-groq is not installed. Run: pip install langchain-groq"
     ) from e
-from pypdf import PdfReader
+import io
 
 load_dotenv()
 
@@ -143,8 +143,31 @@ def _local_skills(text: str) -> set:
 # ── PDF Extraction ────────────────────────────────────────────────────────────
 
 def extract_text_from_pdf(pdf_file) -> str:
-    reader = PdfReader(pdf_file)
-    return "\n".join(page.extract_text() or "" for page in reader.pages)
+    raw = pdf_file.read() if hasattr(pdf_file, "read") else pdf_file
+
+    # Step 1: pdfplumber — layout-aware, handles multi-column resumes
+    text = ""
+    try:
+        import pdfplumber
+        with pdfplumber.open(io.BytesIO(raw)) as pdf:
+            text = "\n".join(page.extract_text() or "" for page in pdf.pages)
+    except Exception as e:
+        logger.warning("pdfplumber extraction failed: %s", e)
+
+    # Step 2: OCR fallback — fires when PDF is image-based or vector-path text
+    if len(text.strip()) < 200:
+        try:
+            from pdf2image import convert_from_bytes
+            import pytesseract
+            images = convert_from_bytes(raw)
+            ocr_text = "\n".join(pytesseract.image_to_string(img) for img in images)
+            if len(ocr_text.strip()) > len(text.strip()):
+                text = ocr_text
+                logger.info("OCR fallback used — extracted %d chars", len(text.strip()))
+        except Exception as e:
+            logger.warning("OCR fallback failed (pdf2image/pytesseract not installed?): %s", e)
+
+    return text
 
 
 # ── Step 1: Skills + Score ────────────────────────────────────────────────────

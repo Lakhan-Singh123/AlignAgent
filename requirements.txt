@@ -6,7 +6,9 @@ langchain-groq
 langchain-community
 langchain-text-splitters
 fastembed
-pypdf
+pdfplumber
+pdf2image
+pytesseract
 docx2txt
 python-dotenv
 streamlit
@@ -17,3 +19,4 @@ fpdf2
 beautifulsoup4
 requests
 plotly
+tenacity

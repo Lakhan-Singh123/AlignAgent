@@ -18,7 +18,7 @@ except ImportError:  # pragma: no cover - dependency error is raised at runtime.
     faiss = None
 
 from langchain_community.docstore.in_memory import InMemoryDocstore
-from langchain_community.document_loaders import Docx2txtLoader, PyPDFLoader, TextLoader
+from langchain_community.document_loaders import Docx2txtLoader, TextLoader
 from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
@@ -46,6 +46,39 @@ if not logger.handlers:
         level=logging.INFO,
         format="%(asctime)s | %(levelname)s | %(message)s",
     )
+
+
+class _PdfWithOcrLoader:
+    """pdfplumber first; pytesseract OCR fallback for image-based / vector-path PDFs."""
+
+    def __init__(self, file_path: str) -> None:
+        self.file_path = file_path
+
+    def load(self) -> list[Document]:
+        text = ""
+
+        # Step 1: pdfplumber — layout-aware, handles multi-column
+        try:
+            import pdfplumber
+            with pdfplumber.open(self.file_path) as pdf:
+                text = "\n".join(page.extract_text() or "" for page in pdf.pages)
+        except Exception as e:
+            logger.warning("pdfplumber failed for %s: %s", self.file_path, e)
+
+        # Step 2: OCR fallback when text is too sparse
+        if len(text.strip()) < 200:
+            try:
+                from pdf2image import convert_from_path
+                import pytesseract
+                images = convert_from_path(self.file_path)
+                ocr_text = "\n".join(pytesseract.image_to_string(img) for img in images)
+                if len(ocr_text.strip()) > len(text.strip()):
+                    text = ocr_text
+                    logger.info("OCR fallback used for %s — %d chars", self.file_path, len(text.strip()))
+            except Exception as e:
+                logger.warning("OCR fallback failed (pdf2image/pytesseract not installed?): %s", e)
+
+        return [Document(page_content=text, metadata={"source": self.file_path})]
 
 
 class MultiTenantIngestionPipeline:
@@ -209,11 +242,11 @@ class MultiTenantIngestionPipeline:
             if candidate.is_file() and candidate.suffix.lower() in self.SUPPORTED_EXTENSIONS:
                 yield candidate
 
-    def _build_loader(self, path: Path) -> PyPDFLoader | Docx2txtLoader | TextLoader:
+    def _build_loader(self, path: Path) -> _PdfWithOcrLoader | Docx2txtLoader | TextLoader:
         """Create the appropriate LangChain loader for a file path."""
         suffix = path.suffix.lower()
         if suffix == ".pdf":
-            return PyPDFLoader(str(path))
+            return _PdfWithOcrLoader(str(path))
         if suffix == ".docx":
             return Docx2txtLoader(str(path))
         if suffix == ".txt":

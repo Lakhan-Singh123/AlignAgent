@@ -462,6 +462,15 @@ with mode_tab:
             st.stop()
 
         resume_text = extract_text_from_pdf(uploaded_file)
+
+        if len(resume_text.strip()) < 200:
+            st.warning(
+                f"Only {len(resume_text.strip())} characters were extracted from your PDF. "
+                "This usually means the resume was exported as an image (Canva, Adobe Illustrator) "
+                "or uses a complex multi-column layout. Results may be inaccurate. "
+                "For best results, upload a text-based PDF or export from Google Docs / Microsoft Word."
+            )
+
         report = {}
 
         if "Quick" in pipeline_mode:
@@ -1178,6 +1187,13 @@ with compare_tab:
             st.stop()
 
         cmp_resume_text = extract_text_from_pdf(cmp_file)
+
+        if len(cmp_resume_text.strip()) < 200:
+            st.warning(
+                f"Only {len(cmp_resume_text.strip())} characters were extracted from your PDF. "
+                "The resume may be image-based or have a complex layout — comparison results may be inaccurate."
+            )
+
         results = []
 
         with st.spinner(f"Analysing {len(filled_jds)} job(s)…"):

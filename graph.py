@@ -22,12 +22,20 @@ import json
 import logging
 import os
 import re
+import time
 from typing import List, TypedDict
 
 from dotenv import load_dotenv
 from langchain_core.documents import Document
 from langchain_groq import ChatGroq
 from langgraph.graph import END, StateGraph
+from tenacity import (
+    retry,
+    retry_if_exception,
+    stop_after_attempt,
+    wait_exponential,
+    before_sleep_log,
+)
 
 from ingestion import MultiTenantIngestionPipeline
 from skill_gap_analyzer import SkillGapAnalyzer
@@ -73,6 +81,23 @@ def _llm() -> ChatGroq:
         temperature=0.2,
         groq_api_key=os.getenv("GROQ_API_KEY"),
     )
+
+
+def _is_rate_limit(exc: BaseException) -> bool:
+    msg = str(exc).lower()
+    return "429" in msg or "rate limit" in msg or "rate_limit" in msg
+
+
+@retry(
+    retry=retry_if_exception(_is_rate_limit),
+    wait=wait_exponential(multiplier=2, min=5, max=65),
+    stop=stop_after_attempt(6),
+    before_sleep=before_sleep_log(logger, logging.WARNING),
+    reraise=True,
+)
+def _invoke(llm: ChatGroq, prompt: str) -> str:
+    """Single LLM call with automatic exponential back-off on Groq 429 errors."""
+    return llm.invoke(prompt).content
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -133,8 +158,8 @@ def generate_queries_node(state: AgentState) -> dict:
         'Return ONLY a JSON array of 4 strings. Example: ["query 1", "query 2", "query 3", "query 4"]'
     )
 
-    candidate_queries = _parse_json_list(llm.invoke(candidate_prompt).content)
-    internship_queries = _parse_json_list(llm.invoke(internship_prompt).content)
+    candidate_queries = _parse_json_list(_invoke(llm, candidate_prompt))
+    internship_queries = _parse_json_list(_invoke(llm, internship_prompt))
 
     logger.info("✅ %d candidate queries, %d internship queries generated.",
                 len(candidate_queries), len(internship_queries))
@@ -157,28 +182,34 @@ def retrieve_node(state: AgentState) -> dict:
 # WHY: CRAG pattern — filter out off-topic chunks before they confuse the LLM.
 
 def grade_docs_node(state: AgentState) -> dict:
-    logger.info("🔬 [3/7] Grading documents for relevance...")
+    logger.info("🔬 [3/7] Grading documents for relevance (batched)...")
     llm = _llm()
 
     def grade(docs: list[Document], topic: str) -> list[Document]:
-        kept = []
-        for doc in docs:
-            prompt = (
-                f"Score this document's relevance to '{topic}' from 1 to 5.\n"
-                "Return ONLY a single digit (1-5). Nothing else.\n\n"
-                f"Document:\n{doc.page_content[:500]}"
-            )
-            try:
-                raw = llm.invoke(prompt).content.strip()
-                score = int(re.search(r"[1-5]", raw).group())
-                if score >= 3:
-                    kept.append(doc)
-                    logger.info("  ✅ score %d/5 kept", score)
-                else:
-                    logger.info("  ❌ score %d/5 filtered", score)
-            except Exception:
-                kept.append(doc)  # keep on parse error
-        return kept
+        if not docs:
+            return []
+        # Send all docs in a single call — reduces N calls to 1
+        doc_block = "\n\n".join(
+            f"[Doc {i}]: {doc.page_content[:400]}"
+            for i, doc in enumerate(docs)
+        )
+        prompt = (
+            f"Score each document's relevance to '{topic}' from 1 to 5.\n"
+            f"Return ONLY a JSON array of integers in order, one per doc.\n"
+            f"Example for 3 docs: [4, 2, 5]\n\n{doc_block}"
+        )
+        try:
+            raw = _invoke(llm, prompt)
+            arr = re.search(r"\[.*?\]", raw, re.DOTALL)
+            scores = json.loads(arr.group()) if arr else []
+            if len(scores) != len(docs):
+                logger.warning("  Score count mismatch — keeping all %d docs", len(docs))
+                return docs
+            kept = [doc for doc, score in zip(docs, scores) if int(score) >= 3]
+            logger.info("  Graded %d docs → %d kept for '%s'", len(docs), len(kept), topic)
+            return kept or docs  # never return empty — keep all if everything filtered
+        except Exception:
+            return docs  # keep all on any error
 
     candidate_docs = grade(state["candidate_docs"], "candidate skills and background")
     internship_docs = grade(state["internship_docs"], "internship requirements and skills")
@@ -268,7 +299,7 @@ Candidate evidence:
 Internship evidence:
 {state["internship_context"]}{web_section}""".strip()
 
-    raw_report = llm.invoke(prompt).content.strip()
+    raw_report = _invoke(llm, prompt).strip()
     logger.info("✅ Report generated.")
     return {"raw_report": raw_report}
 
@@ -297,11 +328,10 @@ def generate_resources_node(state: AgentState) -> dict:
         pass
 
     resources = {}
+    llm = _llm()
     for skill in missing_skills[:5]:  # cap at 5 to avoid rate limits
         try:
             result = search.invoke(f"free {skill} course tutorial for beginners site:youtube.com OR site:coursera.org OR site:huggingface.co OR site:fast.ai OR site:docs.python.org")
-            # Let the LLM extract clean resource entries from the search result
-            llm = _llm()
             extract_prompt = f"""From this web search result about learning "{skill}", extract up to 3 free learning resources.
 
 Search result:
@@ -309,7 +339,7 @@ Search result:
 
 Return ONLY a JSON array (no extra text):
 [{{"title": "...", "url": "...", "type": "course|docs|video|book"}}]"""
-            raw = llm.invoke(extract_prompt).content
+            raw = _invoke(llm, extract_prompt)
             cleaned = re.sub(r"```(?:json)?", "", raw).replace("```", "").strip()
             arr_match = re.search(r"\[.*\]", cleaned, re.DOTALL)
             if arr_match:
@@ -318,6 +348,7 @@ Return ONLY a JSON array (no extra text):
                 logger.info("  ✅ Found %d resource(s) for %s", len(entries), skill)
         except Exception:
             logger.warning("  ⚠️  Resource search failed for: %s", skill)
+        time.sleep(2)  # proactive buffer between skill lookups to stay under RPM
 
     return {"resources": resources}
 
@@ -343,7 +374,7 @@ Reply ONLY with valid JSON:
 
     grounding_passed = True
     try:
-        raw = llm.invoke(prompt).content
+        raw = _invoke(llm, prompt)
         cleaned = re.sub(r"```(?:json)?", "", raw).replace("```", "").strip()
         # Extract just the JSON object if the model adds prose around it
         match = re.search(r"\{.*\}", cleaned, re.DOTALL)
