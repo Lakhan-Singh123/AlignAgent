@@ -1,4 +1,8 @@
 import json
+import shutil
+from datetime import datetime, timedelta
+from pathlib import Path
+
 import streamlit as st
 
 try:
@@ -8,6 +12,7 @@ except ImportError:
     _PLOTLY_OK = False
 
 from analyzer import (
+    _MAX_RESUME_CHARS,
     check_ats_score,
     extract_text_from_pdf,
     generate_cover_letter,
@@ -358,6 +363,27 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
+# ── Startup: clean up old workspaces and reports ─────────────────────────────
+def _cleanup_old_data(max_age_days: int = 7) -> None:
+    cutoff = datetime.now() - timedelta(days=max_age_days)
+    for base_dir in ["workspaces", "reports"]:
+        base = Path(base_dir)
+        if not base.exists():
+            continue
+        for item in base.iterdir():
+            if item.name.startswith("."):
+                continue
+            try:
+                if datetime.fromtimestamp(item.stat().st_mtime) < cutoff:
+                    shutil.rmtree(item) if item.is_dir() else item.unlink()
+            except Exception:
+                pass
+
+if "_cleanup_done" not in st.session_state:
+    _cleanup_old_data()
+    st.session_state._cleanup_done = True
+
+
 # ── Sidebar: Progress Tracker ─────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("### AlignAgent")
@@ -381,6 +407,14 @@ with st.sidebar:
     st.markdown("<hr style='border-color:#000000;margin:1rem 0'>", unsafe_allow_html=True)
     st.markdown("#### About")
     st.caption("Powered by **Groq** (llama-3.3-70b). Fast, free tier.")
+
+    st.markdown("<hr style='border-color:#000000;margin:1rem 0'>", unsafe_allow_html=True)
+    st.markdown("#### Privacy")
+    st.caption(
+        "Your resume and job description text are sent to **Groq's API** (USA) for AI processing. "
+        "No data is stored on Groq beyond the duration of the request. "
+        "Do not upload documents containing passwords or financial information."
+    )
 
 
 # ── Hero ──────────────────────────────────────────────────────────────────────
@@ -470,12 +504,25 @@ with mode_tab:
                 "or uses a complex multi-column layout. Results may be inaccurate. "
                 "For best results, upload a text-based PDF or export from Google Docs / Microsoft Word."
             )
+        elif len(resume_text) > _MAX_RESUME_CHARS:
+            st.info(
+                f"Your resume is {len(resume_text):,} characters — only the first "
+                f"{_MAX_RESUME_CHARS:,} will be analysed. Consider trimming older or less relevant experience."
+            )
 
         report = {}
 
         if "Quick" in pipeline_mode:
-            with st.spinner("Running quick analysis…"):
-                report = get_ai_analysis(resume_text, job_description)
+            try:
+                with st.spinner("Running quick analysis…"):
+                    report = get_ai_analysis(resume_text, job_description)
+            except Exception as e:
+                err = str(e).lower()
+                if "429" in err or "rate limit" in err:
+                    st.error("Groq rate limit hit. Wait 60 seconds and try again.")
+                else:
+                    st.error(f"Analysis failed — Groq may be temporarily unavailable. ({e})")
+                st.stop()
         else:
             # Deep agentic pipeline with real-time node progress
             from pipeline import run_agentic_analysis
@@ -491,16 +538,30 @@ with mode_tab:
                     html += f'<div class="node-step done">✓ {node_label(n)}</div>'
                 progress_area.markdown(html, unsafe_allow_html=True)
 
-            with st.spinner("Running deep agentic analysis…"):
-                final_state = {}
-                uploaded_file.seek(0)  # extract_text_from_pdf already consumed the stream
-                for event in run_agentic_analysis(
-                    uploaded_file.read(), uploaded_file.name, job_description
-                ):
-                    node_name = list(event.keys())[0]
-                    completed_nodes.append(node_name)
-                    _render_nodes(completed_nodes)
-                    final_state = event[node_name]
+            try:
+                with st.spinner("Running deep agentic analysis…"):
+                    final_state = {}
+                    uploaded_file.seek(0)  # extract_text_from_pdf already consumed the stream
+                    for event in run_agentic_analysis(
+                        uploaded_file.read(), uploaded_file.name, job_description
+                    ):
+                        node_name = list(event.keys())[0]
+                        completed_nodes.append(node_name)
+                        _render_nodes(completed_nodes)
+                        final_state = event[node_name]
+            except Exception as e:
+                err = str(e).lower()
+                if "429" in err or "rate limit" in err:
+                    st.error(
+                        "Groq rate limit reached even after retrying. "
+                        "Wait 60 seconds and try again, or switch to Quick mode."
+                    )
+                else:
+                    st.error(
+                        f"Deep analysis failed mid-run — Groq may be temporarily down. "
+                        f"Try Quick mode as a fallback. ({e})"
+                    )
+                st.stop()
 
             # Load report from saved file
             report_path = final_state.get("analysis_report_path", "")
@@ -574,6 +635,7 @@ with mode_tab:
               <div class="score-sub {score_cls}">{score_sub}</div>
             </div>""", unsafe_allow_html=True)
             st.progress(adj_score / 100)
+            st.caption("AI estimate — treat as a guide, not a precise measurement.")
     
         with tc:
             if timeline:
@@ -796,6 +858,7 @@ with mode_tab:
     
         with t2:
             if resources:
+                st.caption("Links are AI-generated — verify each URL before clicking, as some may be inaccurate.")
                 for skill, links in resources.items():
                     st.markdown(f'<div class="section-title">{skill}</div>', unsafe_allow_html=True)
                     for r in links:

@@ -63,7 +63,25 @@ Save report
 
 Sign up at [console.groq.com](https://console.groq.com) and create an API key. The free tier is sufficient.
 
-### 2. Clone and install dependencies
+### 2. Install system dependencies (for OCR fallback)
+
+These are needed to extract text from image-based PDFs (Canva, Adobe exports).
+
+**Mac:**
+```bash
+brew install tesseract poppler
+```
+
+**Ubuntu / Debian:**
+```bash
+sudo apt install tesseract-ocr poppler-utils
+```
+
+**Windows:** Download [Tesseract](https://github.com/UB-Mannheim/tesseract/wiki) and [Poppler](https://github.com/oschwartz10612/poppler-windows/releases) and add both to PATH.
+
+> OCR is optional — the app works without it, but image-based PDFs will extract no text.
+
+### 3. Clone and install Python dependencies
 
 ```bash
 git clone https://github.com/YOUR_USERNAME/AlignAgent.git
@@ -71,7 +89,7 @@ cd AlignAgent
 pip install -r requirements.txt
 ```
 
-### 3. Set up environment
+### 4. Set up environment
 
 ```bash
 cp .env.example .env
@@ -84,7 +102,7 @@ GROQ_API_KEY=your_groq_api_key_here
 GROQ_MODEL=llama-3.3-70b-versatile
 ```
 
-### 4. Ingest sample documents
+### 5. Ingest sample documents
 
 ```bash
 python ingest_workspace.py --workspace candidate_demo --path sample_docs/resume.txt

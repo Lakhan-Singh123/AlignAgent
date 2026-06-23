@@ -211,8 +211,9 @@ def grade_docs_node(state: AgentState) -> dict:
         except Exception:
             return docs  # keep all on any error
 
-    candidate_docs = grade(state["candidate_docs"], "candidate skills and background")
-    internship_docs = grade(state["internship_docs"], "internship requirements and skills")
+    # Cap before batching — beyond 12 docs the prompt grows too large for Groq's TPM limit
+    candidate_docs = grade(state["candidate_docs"][:12], "candidate skills and background")
+    internship_docs = grade(state["internship_docs"][:12], "internship requirements and skills")
 
     return {
         "candidate_docs": candidate_docs,

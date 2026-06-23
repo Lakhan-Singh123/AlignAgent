@@ -18,9 +18,9 @@ logger = logging.getLogger(__name__)
 if not logger.handlers:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 
-# Hard cap so we never overflow llama3.2's context window
-_MAX_RESUME_CHARS = 3000
-_MAX_JD_CHARS     = 2000
+# Groq llama-3.3-70b context is 128 k tokens; these caps keep prompts fast
+_MAX_RESUME_CHARS = 6000
+_MAX_JD_CHARS     = 3000
 
 # Skills the local fallback knows how to detect
 _SKILL_PATTERNS = {
