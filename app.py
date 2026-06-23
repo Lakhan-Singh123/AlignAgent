@@ -31,273 +31,307 @@ from progress import (
 st.set_page_config(
     page_title="AlignAgent",
     layout="wide",
-    page_icon="🎯",
+    page_icon="◆",
     initial_sidebar_state="expanded",
 )
 
 # ── CSS ───────────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 
   /* ── Base ── */
-  .stApp { background:#080C14; color:#E2E8F0;
+  .stApp { background:#FFFFFF; color:#000000;
            font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; }
-  .main .block-container { background:#080C14; padding-top:1.5rem; max-width:1140px; }
+  .main .block-container { background:#FFFFFF; padding-top:1.5rem; max-width:1140px; }
   #MainMenu,footer,header { visibility:hidden; }
 
   /* ── Sidebar ── */
   [data-testid="stSidebar"] {
-    background:linear-gradient(180deg,#0D1220 0%,#080C14 100%) !important;
-    border-right:1px solid #1E2A3A !important;
+    background:#FFF9C4 !important;
+    border-right:4px solid #000000 !important;
   }
-  [data-testid="stSidebar"] * { color:#C9D1D9 !important; }
+  [data-testid="stSidebar"] * { color:#000000 !important; }
 
   /* ── Inputs ── */
   textarea, input[type="text"] {
-    background:#0D1220 !important; color:#E2E8F0 !important;
-    border:1px solid #1E2A3A !important; border-radius:10px !important;
-    transition:border-color .2s !important;
+    background:#FFFFFF !important; color:#000000 !important;
+    border:3px solid #000000 !important; border-radius:0 !important;
+    transition:border-color .15s !important;
   }
   textarea:focus, input[type="text"]:focus {
-    border-color:#4F8EF7 !important; box-shadow:0 0 0 3px #4F8EF720 !important;
+    border-color:#FFE000 !important; box-shadow:4px 4px 0px #000000 !important;
   }
-  textarea::placeholder, input::placeholder { color:#6B7A8D !important; }
+  textarea::placeholder, input::placeholder { color:#888888 !important; }
 
   .stFileUploader section {
-    background:linear-gradient(135deg,#0D1220,#111827) !important;
-    border-radius:12px !important; border:1.5px dashed #2D3748 !important;
-    transition:border-color .2s !important;
+    background:#FFFDE7 !important;
+    border-radius:0 !important; border:3px dashed #000000 !important;
+    transition:border-color .15s !important;
   }
-  .stFileUploader section:hover { border-color:#4F8EF7 !important; }
-  .stFileUploader section small { color:#8899AA !important; }
+  .stFileUploader section:hover { border-color:#FFE000 !important; }
+  .stFileUploader section small { color:#555555 !important; }
 
   /* ── Buttons ── */
   .stButton>button {
-    background:linear-gradient(135deg,#2563EB,#4F8EF7) !important;
-    color:#fff !important; border:none !important; border-radius:10px !important;
-    font-weight:600 !important; padding:0.6rem 1.8rem !important;
-    box-shadow:0 4px 15px #2563EB33 !important;
-    transition:all .2s !important; letter-spacing:.01em !important;
+    background:#FFE000 !important;
+    color:#000000 !important; border:3px solid #000000 !important; border-radius:0 !important;
+    font-weight:800 !important; padding:0.6rem 1.8rem !important;
+    box-shadow:5px 5px 0px #000000 !important;
+    transition:all .1s !important; letter-spacing:.05em !important;
+    text-transform:uppercase !important;
   }
   .stButton>button:hover {
-    background:linear-gradient(135deg,#3B82F6,#60A5FA) !important;
-    box-shadow:0 6px 20px #3B82F640 !important;
-    transform:translateY(-1px) !important;
+    background:#FFD000 !important;
+    box-shadow:3px 3px 0px #000000 !important;
+    transform:translate(2px, 2px) !important;
   }
 
   /* ── Tabs ── */
   .stTabs [data-baseweb="tab-list"] {
-    background:#0D1220; border-radius:12px; padding:5px;
-    gap:4px; border:1px solid #1E2A3A;
+    background:#FFFFFF; border-radius:0; padding:0;
+    gap:0; border:3px solid #000000;
   }
   .stTabs [data-baseweb="tab"] {
-    background:transparent; color:#8899AA; border-radius:9px;
-    font-weight:500; font-size:.875rem; padding:.45rem 1rem; border:none;
-    transition:all .15s;
+    background:#FFFFFF; color:#000000; border-radius:0;
+    font-weight:700; font-size:.875rem; padding:.5rem 1rem; border:none;
+    border-right:2px solid #000000;
+    transition:all .1s;
   }
   .stTabs [aria-selected="true"] {
-    background:linear-gradient(135deg,#1E293B,#162032) !important;
-    color:#93C5FD !important; box-shadow:0 2px 8px #00000040 !important;
+    background:#FFE000 !important;
+    color:#000000 !important; box-shadow:none !important;
   }
   .stTabs [data-baseweb="tab-panel"] { padding-top:1.4rem; }
 
   /* ── Progress bar ── */
   .stProgress>div>div {
-    background:linear-gradient(90deg,#2563EB,#7C3AED) !important;
-    border-radius:999px !important;
+    background:#FFE000 !important;
+    border-radius:0 !important;
   }
-  .stProgress>div { background:#1E2A3A !important; border-radius:999px !important; height:8px !important; }
+  .stProgress>div { background:#E8E8E8 !important; border-radius:0 !important; height:10px !important; border:2px solid #000000 !important; }
 
   /* ── Checkbox ── */
-  .stCheckbox label { color:#C9D1D9 !important; }
+  .stCheckbox label { color:#000000 !important; }
+
+  /* ── All native widget text → black on white ── */
+  .stRadio label, .stRadio p,
+  .stSelectbox label,
+  .stTextInput label,
+  .stTextArea label,
+  .stFileUploader label,
+  .stMarkdown p, .stMarkdown li,
+  [data-testid="stText"], [data-testid="stMarkdownContainer"] p,
+  [data-testid="stMarkdownContainer"] li,
+  [data-testid="stCaption"] p,
+  .stCaption, div[data-testid="stCaptionContainer"] p,
+  .element-container p, .element-container li,
+  label, p, li, span:not([class*="tag"]) { color:#000000; }
+
+  /* ── Radio button options ── */
+  [data-baseweb="radio"] label span,
+  [data-baseweb="radio"] div { color:#000000 !important; }
+
+  /* ── Captions / help text ── */
+  small, .stCaption p,
+  [data-testid="stCaptionContainer"] { color:#444444 !important; }
+
+  /* ── Select/dropdown text ── */
+  [data-baseweb="select"] div { color:#000000 !important; }
+
+  /* ── Expander ── */
+  [data-testid="stExpander"] { border:2px solid #000000 !important; border-radius:0 !important; }
+  [data-testid="stExpander"] summary { color:#000000 !important; font-weight:700 !important; }
+  [data-testid="stExpander"] summary p { color:#000000 !important; }
+
+  /* ── Spinner text ── */
+  [data-testid="stSpinner"] p { color:#000000 !important; }
 
   /* ── Alerts ── */
-  [data-testid="stAlert"] { border-radius:12px !important; }
+  [data-testid="stAlert"] { border-radius:0 !important; border:2px solid #000000 !important; }
+  [data-testid="stAlert"] p { color:#000000 !important; }
 
   /* ── Hero ── */
   .hero {
-    padding:1.4rem 0 2rem; border-bottom:1px solid #1E2A3A; margin-bottom:2rem;
-    background:linear-gradient(135deg,#080C14 60%,#0D1A2E 100%);
+    padding:1.6rem 0 2rem; border-bottom:5px solid #000000; margin-bottom:2rem;
+    background:#FFE000;
   }
   .hero-badge {
     display:inline-block;
-    background:linear-gradient(135deg,#0F1E3A,#162032);
-    color:#60A5FA; font-size:.68rem; font-weight:700; letter-spacing:1.5px;
-    text-transform:uppercase; padding:4px 12px; border-radius:999px;
-    border:1px solid #2563EB55; margin-bottom:.7rem;
-    box-shadow:0 0 12px #2563EB22;
+    background:#000000;
+    color:#FFE000; font-size:.68rem; font-weight:800; letter-spacing:2px;
+    text-transform:uppercase; padding:4px 14px; border-radius:0;
+    border:2px solid #000000; margin-bottom:.7rem;
   }
   .hero h1 {
-    font-size:2.1rem; font-weight:700; margin:0 0 .4rem; letter-spacing:-.6px;
-    background:linear-gradient(135deg,#E2E8F0 30%,#93C5FD 100%);
-    -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+    font-size:2.5rem; font-weight:900; margin:0 0 .4rem; letter-spacing:-.5px;
+    color:#000000;
+    -webkit-text-fill-color:#000000;
+    background:none;
   }
-  .hero p { color:#94A3B8; margin:0; font-size:.95rem; }
+  .hero p { color:#333333; margin:0; font-size:.95rem; font-weight:500; }
 
   /* ── Input labels ── */
   .input-label {
-    font-size:.72rem; font-weight:700; letter-spacing:.8px;
-    text-transform:uppercase; color:#4F8EF7; margin-bottom:.4rem;
+    font-size:.72rem; font-weight:800; letter-spacing:.8px;
+    text-transform:uppercase; color:#000000; margin-bottom:.4rem;
   }
 
   /* ── Score cards ── */
   .score-card {
-    background:linear-gradient(145deg,#0D1220,#111827);
-    border:1px solid #1E2A3A; border-radius:16px;
+    background:#FFFFFF;
+    border:3px solid #000000; border-radius:0;
     padding:1.6rem 1rem; text-align:center; margin-bottom:.75rem;
-    box-shadow:0 4px 24px #00000040;
-    transition:transform .2s, box-shadow .2s;
+    box-shadow:5px 5px 0px #000000;
+    transition:transform .1s, box-shadow .1s;
   }
-  .score-card:hover { transform:translateY(-2px); box-shadow:0 8px 32px #00000055; }
+  .score-card:hover { transform:translate(-2px,-2px); box-shadow:7px 7px 0px #000000; }
   .score-label {
-    font-size:.68rem; font-weight:700; letter-spacing:.8px;
-    text-transform:uppercase; color:#8899AA; margin-bottom:.3rem;
+    font-size:.68rem; font-weight:800; letter-spacing:.8px;
+    text-transform:uppercase; color:#555555; margin-bottom:.3rem;
   }
-  .score-number { font-size:3.2rem; font-weight:700; line-height:1.1; }
-  .score-sub { font-size:.8rem; font-weight:500; margin-top:.25rem; }
+  .score-number { font-size:3.2rem; font-weight:900; line-height:1.1; }
+  .score-sub { font-size:.8rem; font-weight:700; margin-top:.25rem; text-transform:uppercase; }
 
-  .green  { color:#34D399; }
-  .yellow { color:#FBBF24; }
-  .red    { color:#F87171; }
-  .purple { color:#A78BFA; }
+  .green  { color:#000000; }
+  .yellow { color:#CC7700; }
+  .red    { color:#E65000; }
+  .purple { color:#FF6600; }
 
   /* ── Skill tags ── */
   .tag-wrap { display:flex; flex-wrap:wrap; gap:8px; margin-top:.6rem; }
-  .tag { display:inline-block; padding:5px 14px; border-radius:999px; font-size:.79rem; font-weight:600; }
+  .tag { display:inline-block; padding:5px 14px; border-radius:0; font-size:.79rem; font-weight:700; border:2px solid #000000; }
   .tag-green {
-    background:linear-gradient(135deg,#052E16,#064E3B);
-    color:#6EE7B7; border:1px solid #059669;
-    box-shadow:0 0 8px #05966922;
+    background:#FFE000;
+    color:#000000;
   }
   .tag-red {
-    background:linear-gradient(135deg,#2D0A0A,#450A0A);
-    color:#FCA5A5; border:1px solid #DC2626;
-    box-shadow:0 0 8px #DC262622;
+    background:#FF6600;
+    color:#000000;
   }
 
   /* ── Section titles ── */
   .section-title {
-    font-size:.68rem; font-weight:700; letter-spacing:.8px; text-transform:uppercase;
-    color:#4F8EF7; margin:1.3rem 0 .7rem; padding-bottom:.4rem;
-    border-bottom:1px solid #1E2A3A;
+    font-size:.68rem; font-weight:800; letter-spacing:.8px; text-transform:uppercase;
+    color:#000000; margin:1.3rem 0 .7rem; padding-bottom:.4rem;
+    border-bottom:3px solid #FFE000;
   }
 
   /* ── Timeline ── */
   .timeline-item {
-    display:flex; gap:1rem; padding:1.1rem 0; border-bottom:1px solid #1E2A3A;
-    transition:background .15s;
+    display:flex; gap:1rem; padding:1.1rem 0; border-bottom:2px solid #000000;
+    transition:background .1s;
   }
   .week-dot {
-    flex-shrink:0; width:38px; height:38px; border-radius:50%;
-    background:linear-gradient(135deg,#1E3A5F,#162032);
-    border:1.5px solid #3B82F660; color:#60A5FA; font-weight:700; font-size:.7rem;
+    flex-shrink:0; width:38px; height:38px; border-radius:0;
+    background:#FFE000;
+    border:2px solid #000000; color:#000000; font-weight:800; font-size:.7rem;
     display:flex; align-items:center; justify-content:center; margin-top:2px;
-    box-shadow:0 0 10px #3B82F625;
   }
-  .week-content h4 { margin:0 0 .15rem; font-size:.93rem; font-weight:600; color:#E2E8F0; }
-  .week-content .goal { margin:0; font-size:.82rem; color:#94A3B8; }
+  .week-content h4 { margin:0 0 .15rem; font-size:.93rem; font-weight:700; color:#000000; }
+  .week-content .goal { margin:0; font-size:.82rem; color:#555555; }
   .task-list { margin:.4rem 0 0; padding-left:1.1rem; }
-  .task-list li { font-size:.82rem; color:#94A3B8; margin-bottom:3px; }
+  .task-list li { font-size:.82rem; color:#555555; margin-bottom:3px; }
   .project-chip {
     display:inline-block; margin-top:.5rem;
-    background:linear-gradient(135deg,#052E16,#064E3B);
-    color:#6EE7B7; border:1px solid #059669;
-    border-radius:6px; padding:3px 10px; font-size:.75rem; font-weight:600;
+    background:#FFE000;
+    color:#000000; border:2px solid #000000;
+    border-radius:0; padding:3px 10px; font-size:.75rem; font-weight:700;
   }
 
   /* ── Resource cards ── */
   .resource-card {
-    background:linear-gradient(135deg,#0D1220,#111827);
-    border:1px solid #1E2A3A; border-radius:12px;
+    background:#FFFFFF;
+    border:2px solid #000000; border-radius:0;
     padding:.8rem 1rem; margin-bottom:.5rem; display:flex;
-    align-items:center; gap:.8rem; transition:all .2s;
+    align-items:center; gap:.8rem; transition:all .1s;
+    box-shadow:3px 3px 0px #000000;
   }
-  .resource-card:hover { border-color:#3B82F6; box-shadow:0 4px 16px #3B82F620; transform:translateX(3px); }
+  .resource-card:hover { box-shadow:5px 5px 0px #FFE000; transform:translate(-2px,-2px); }
   .resource-type {
-    flex-shrink:0; font-size:.6rem; font-weight:700; text-transform:uppercase;
-    letter-spacing:.6px; padding:3px 8px; border-radius:6px;
-    background:#1E2A3A; color:#60A5FA; border:1px solid #2D3F55;
+    flex-shrink:0; font-size:.6rem; font-weight:800; text-transform:uppercase;
+    letter-spacing:.6px; padding:3px 8px; border-radius:0;
+    background:#000000; color:#FFE000; border:none;
   }
-  .resource-title { font-size:.87rem; font-weight:500; color:#C9D1D9; }
-  .resource-title a { color:#60A5FA; text-decoration:none; transition:color .15s; }
-  .resource-title a:hover { color:#93C5FD; text-decoration:underline; }
+  .resource-title { font-size:.87rem; font-weight:600; color:#000000; }
+  .resource-title a { color:#CC6600; text-decoration:underline; transition:color .15s; }
+  .resource-title a:hover { color:#FF6600; }
 
   /* ── Interview questions ── */
   .interview-q {
-    background:linear-gradient(135deg,#0D1220,#0F1A2E);
-    border:1px solid #1E2A3A; border-left:3px solid #3B82F6;
-    border-radius:0 12px 12px 0; padding:.9rem 1.1rem; margin-bottom:.5rem;
-    font-size:.88rem; color:#C9D1D9; transition:border-color .15s;
+    background:#FFFDE7;
+    border:2px solid #000000; border-left:5px solid #FFE000;
+    border-radius:0; padding:.9rem 1.1rem; margin-bottom:.5rem;
+    font-size:.88rem; color:#000000; transition:border-color .15s;
   }
-  .interview-q:hover { border-left-color:#60A5FA; }
-  .interview-q strong { color:#60A5FA; }
+  .interview-q:hover { border-left-color:#FF6600; }
+  .interview-q strong { color:#CC6600; }
 
   /* ── Resume tips ── */
   .tip-card {
-    background:linear-gradient(135deg,#1C1205,#1A1208);
-    border-left:3px solid #FBBF24; border-radius:0 10px 10px 0;
-    padding:.75rem 1rem; margin-bottom:.5rem; font-size:.87rem; color:#E2E8F0;
-    transition:border-color .15s;
+    background:#FFF9C4;
+    border:2px solid #000000; border-left:5px solid #FF6600; border-radius:0;
+    padding:.75rem 1rem; margin-bottom:.5rem; font-size:.87rem; color:#000000;
+    transition:border-left-color .15s;
   }
-  .tip-card:hover { border-left-color:#F59E0B; }
+  .tip-card:hover { border-left-color:#FFE000; }
 
   /* ── Compare cards ── */
   .compare-card {
-    background:linear-gradient(145deg,#0D1220,#111827);
-    border:1px solid #1E2A3A; border-radius:14px;
+    background:#FFFFFF;
+    border:3px solid #000000; border-radius:0;
     padding:1.3rem; text-align:center;
-    box-shadow:0 4px 20px #00000040;
-    transition:transform .2s, box-shadow .2s;
+    box-shadow:5px 5px 0px #000000;
+    transition:transform .1s, box-shadow .1s;
   }
-  .compare-card:hover { transform:translateY(-2px); box-shadow:0 8px 30px #00000055; }
-  .compare-score { font-size:2.6rem; font-weight:700; }
-  .compare-title { font-size:.82rem; color:#8899AA; font-weight:500; margin-bottom:.5rem; }
+  .compare-card:hover { transform:translate(-2px,-2px); box-shadow:7px 7px 0px #FFE000; }
+  .compare-score { font-size:2.6rem; font-weight:900; }
+  .compare-title { font-size:.82rem; color:#555555; font-weight:700; margin-bottom:.5rem; text-transform:uppercase; }
 
   /* ── Utility ── */
-  .divider { border:none; border-top:1px solid #1E2A3A; margin:1.5rem 0; }
+  .divider { border:none; border-top:3px solid #000000; margin:1.5rem 0; }
 
-  .empty-state { text-align:center; padding:4rem 0; color:#8899AA; }
-  .empty-state .icon { font-size:2.8rem; margin-bottom:.7rem; }
-  .empty-state h3 { color:#94A3B8; font-size:.95rem; font-weight:600; margin:0 0 .3rem; }
+  .empty-state { text-align:center; padding:4rem 0; color:#555555; border:3px dashed #000000; }
+  .empty-state .icon { margin-bottom:.9rem; display:flex; justify-content:center; }
+  .empty-state .icon svg { opacity:.55; }
+  .empty-state h3 { color:#000000; font-size:.95rem; font-weight:800; margin:0 0 .3rem; text-transform:uppercase; }
   .empty-state p  { font-size:.83rem; margin:0; }
 
   /* ── Agent progress nodes ── */
   .node-step {
-    background:#0D1220; border:1px solid #1E2A3A; border-radius:10px;
-    padding:.55rem 1rem; margin-bottom:.35rem; font-size:.84rem; color:#8899AA;
-    transition:all .3s;
+    background:#FFFFFF; border:2px solid #000000; border-radius:0;
+    padding:.55rem 1rem; margin-bottom:.35rem; font-size:.84rem; color:#555555;
+    transition:all .2s;
   }
   .node-step.done {
-    background:linear-gradient(135deg,#052E16,#064E3B);
-    border-color:#059669; color:#6EE7B7;
-    box-shadow:0 0 10px #05966922;
+    background:#FFE000;
+    border-color:#000000; color:#000000; font-weight:700;
   }
 
   /* ── ATS ── */
   .ats-issue {
-    background:linear-gradient(135deg,#2D0A0A,#1A0808);
-    border-left:3px solid #DC2626; border-radius:0 10px 10px 0;
-    padding:.65rem 1rem; margin-bottom:.4rem; font-size:.86rem; color:#FCA5A5;
+    background:#FFF0E6;
+    border:2px solid #000000; border-left:5px solid #FF6600; border-radius:0;
+    padding:.65rem 1rem; margin-bottom:.4rem; font-size:.86rem; color:#000000;
   }
   .ats-suggestion {
-    background:linear-gradient(135deg,#0F1E3A,#0A1628);
-    border-left:3px solid #3B82F6; border-radius:0 10px 10px 0;
-    padding:.65rem 1rem; margin-bottom:.4rem; font-size:.86rem; color:#93C5FD;
+    background:#FFFDE7;
+    border:2px solid #000000; border-left:5px solid #FFE000; border-radius:0;
+    padding:.65rem 1rem; margin-bottom:.4rem; font-size:.86rem; color:#000000;
   }
 
   /* ── Mobile sidebar toggle ── */
   [data-testid="collapsedControl"] {
-    background:linear-gradient(135deg,#1E293B,#162032) !important;
-    border:1px solid #3B82F6 !important; border-radius:0 8px 8px 0 !important;
-    color:#60A5FA !important; width:28px !important;
-    box-shadow:2px 0 12px #3B82F630 !important;
+    background:#FFE000 !important;
+    border:3px solid #000000 !important; border-radius:0 !important;
+    color:#000000 !important; width:28px !important;
+    box-shadow:3px 0 0px #000000 !important;
   }
 
   /* ── Mobile responsive ── */
   @media (max-width: 768px) {
     .hero { padding:1rem 0 1.4rem; }
-    .hero h1 { font-size:1.5rem !important; }
+    .hero h1 { font-size:1.8rem !important; }
     .hero p  { font-size:.85rem; }
     .hero-badge { font-size:.6rem; }
 
@@ -326,9 +360,9 @@ st.markdown("""
 
 # ── Sidebar: Progress Tracker ─────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("### 🎯 AlignAgent")
-    st.markdown("<hr style='border-color:#1E2A3A;margin:.5rem 0 1rem'>", unsafe_allow_html=True)
-    st.markdown("#### 📊 Skill Progress Tracker")
+    st.markdown("### AlignAgent")
+    st.markdown("<hr style='border-color:#000000;margin:.5rem 0 1rem'>", unsafe_allow_html=True)
+    st.markdown("#### Skill Progress Tracker")
     st.caption("Check off skills you've learned — your score updates automatically.")
 
     all_missing = get_all_missing()
@@ -344,15 +378,15 @@ with st.sidebar:
     else:
         st.caption("Run an analysis to populate your tracker.")
 
-    st.markdown("<hr style='border-color:#1E2A3A;margin:1rem 0'>", unsafe_allow_html=True)
-    st.markdown("#### ℹ️ About")
+    st.markdown("<hr style='border-color:#000000;margin:1rem 0'>", unsafe_allow_html=True)
+    st.markdown("#### About")
     st.caption("Powered by **Groq** (llama-3.3-70b). Fast, free tier.")
 
 
 # ── Hero ──────────────────────────────────────────────────────────────────────
 st.markdown("""
 <div class="hero">
-  <div class="hero-badge">⚡ Local · Free · Agentic RAG</div>
+  <div class="hero-badge">Skill Gap Analyser</div>
   <h1>AlignAgent</h1>
   <p>Upload your resume and a job description — get a full skill gap report, week-by-week plan, interview prep, and resume suggestions.</p>
 </div>
@@ -360,7 +394,7 @@ st.markdown("""
 
 
 # ── Mode Tabs ─────────────────────────────────────────────────────────────────
-mode_tab, compare_tab = st.tabs(["🔍  Analyse a Job", "⚖️  Compare Multiple Jobs"])
+mode_tab, compare_tab = st.tabs(["Analyse a Job", "Compare Multiple Jobs"])
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -539,7 +573,7 @@ with mode_tab:
                 <div class="score-card">
                   <div class="score-label">Weeks Remaining</div>
                   <div class="score-number purple">{remaining_weeks}</div>
-                  <div class="score-sub" style="color:#94A3B8;">of {timeline} week plan</div>
+                  <div class="score-sub" style="color:#555555;">of {timeline} week plan</div>
                 </div>""", unsafe_allow_html=True)
     
         with ec:
@@ -548,8 +582,8 @@ with mode_tab:
             st.markdown(f"""
             <div class="score-card">
               <div class="score-label">Skills Learned</div>
-              <div class="score-number" style="color:#58A6FF;">{skills_learned}/{len(missing)}</div>
-              <div class="score-sub" style="color:#94A3B8;">{pct}% of gaps closed</div>
+              <div class="score-number" style="color:#000000;">{skills_learned}/{len(missing)}</div>
+              <div class="score-sub" style="color:#555555;">{pct}% of gaps closed</div>
             </div>""", unsafe_allow_html=True)
     
         # ── Charts row ───────────────────────────────────────────────────────
@@ -557,21 +591,21 @@ with mode_tab:
             ch1, ch2, ch3 = st.columns([1.1, 1, 1.4], gap="large")
     
             with ch1:
-                gauge_color = "#34D399" if adj_score >= 70 else ("#FBBF24" if adj_score >= 40 else "#F87171")
+                gauge_color = "#FFE000" if adj_score >= 70 else ("#FF6600" if adj_score >= 40 else "#E65000")
                 fig_gauge = go.Figure(go.Indicator(
                     mode="gauge+number",
                     value=adj_score,
-                    number={"suffix": "%", "font": {"size": 36, "color": "#E2E8F0"}},
+                    number={"suffix": "%", "font": {"size": 36, "color": "#000000"}},
                     gauge={
-                        "axis": {"range": [0, 100], "tickcolor": "#8899AA",
-                                 "tickfont": {"color": "#8899AA", "size": 10}},
+                        "axis": {"range": [0, 100], "tickcolor": "#555555",
+                                 "tickfont": {"color": "#555555", "size": 10}},
                         "bar": {"color": gauge_color, "thickness": 0.28},
-                        "bgcolor": "#0D1220",
+                        "bgcolor": "#FFFFFF",
                         "borderwidth": 0,
                         "steps": [
-                            {"range": [0,  40], "color": "#2D0A0A"},
-                            {"range": [40, 70], "color": "#1C1205"},
-                            {"range": [70, 100], "color": "#052E16"},
+                            {"range": [0,  40], "color": "#FFE8CC"},
+                            {"range": [40, 70], "color": "#FFF3CC"},
+                            {"range": [70, 100], "color": "#FFFDE7"},
                         ],
                         "threshold": {
                             "line": {"color": gauge_color, "width": 3},
@@ -582,9 +616,9 @@ with mode_tab:
                 ))
                 fig_gauge.update_layout(
                     paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                    font={"color": "#E2E8F0"}, height=210,
+                    font={"color": "#000000"}, height=210,
                     margin=dict(l=20, r=20, t=30, b=10),
-                    title={"text": "Readiness Gauge", "font": {"size": 11, "color": "#8899AA"},
+                    title={"text": "Readiness Gauge", "font": {"size": 11, "color": "#555555"},
                            "x": 0.5, "xanchor": "center"},
                 )
                 st.plotly_chart(fig_gauge, use_container_width=True, config={"displayModeBar": False})
@@ -596,32 +630,32 @@ with mode_tab:
                     labels=donut_labels,
                     values=donut_values,
                     hole=0.68,
-                    marker=dict(colors=["#059669", "#DC2626"],
-                                line=dict(color="#080C14", width=3)),
-                    textfont={"color": "#E2E8F0", "size": 11},
+                    marker=dict(colors=["#FFE000", "#FF6600"],
+                                line=dict(color="#FFFFFF", width=3)),
+                    textfont={"color": "#000000", "size": 11},
                     hovertemplate="%{label}: %{value}<extra></extra>",
                 ))
                 fig_donut.add_annotation(
                     text=f"<b>{len(matched)}/{len(matched)+len(missing)}</b>",
-                    x=0.5, y=0.5, font_size=20, font_color="#E2E8F0", showarrow=False,
+                    x=0.5, y=0.5, font_size=20, font_color="#000000", showarrow=False,
                 )
                 fig_donut.update_layout(
                     paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                    font={"color": "#C9D1D9"}, height=210,
+                    font={"color": "#000000"}, height=210,
                     showlegend=True,
-                    legend=dict(font=dict(color="#C9D1D9", size=10),
+                    legend=dict(font=dict(color="#000000", size=10),
                                 bgcolor="rgba(0,0,0,0)", orientation="h",
                                 x=0.5, xanchor="center", y=-0.05),
                     margin=dict(l=10, r=10, t=30, b=10),
-                    title={"text": "Skills Breakdown", "font": {"size": 11, "color": "#8899AA"},
+                    title={"text": "Skills Breakdown", "font": {"size": 11, "color": "#555555"},
                            "x": 0.5, "xanchor": "center"},
                 )
                 st.plotly_chart(fig_donut, use_container_width=True, config={"displayModeBar": False})
     
             with ch3:
                 all_skills = matched + [s for s in missing if s not in learned]
-                bar_colors = (["#059669"] * len(matched) +
-                              ["#DC2626"] * len([s for s in missing if s not in learned]))
+                bar_colors = (["#FFE000"] * len(matched) +
+                              ["#FF6600"] * len([s for s in missing if s not in learned]))
                 bar_labels = (["✓ " + s for s in matched] +
                               ["✗ " + s for s in missing if s not in learned])
                 if all_skills:
@@ -629,21 +663,21 @@ with mode_tab:
                         y=bar_labels,
                         x=[1] * len(bar_labels),
                         orientation="h",
-                        marker=dict(color=bar_colors, line=dict(width=0)),
+                        marker=dict(color=bar_colors, line=dict(color="#000000", width=1)),
                         text=bar_labels,
                         textposition="inside",
-                        textfont={"color": "#E2E8F0", "size": 10},
+                        textfont={"color": "#000000", "size": 10},
                         hoverinfo="skip",
                     ))
                     fig_bar.update_layout(
                         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                        font={"color": "#C9D1D9"},
+                        font={"color": "#000000"},
                         height=max(180, len(bar_labels) * 26 + 50),
                         xaxis=dict(visible=False, range=[0, 1.05]),
                         yaxis=dict(visible=False),
                         margin=dict(l=5, r=5, t=30, b=10),
                         bargap=0.25,
-                        title={"text": "Skill Map", "font": {"size": 11, "color": "#8899AA"},
+                        title={"text": "Skill Map", "font": {"size": 11, "color": "#555555"},
                                "x": 0.5, "xanchor": "center"},
                     )
                     st.plotly_chart(fig_bar, use_container_width=True, config={"displayModeBar": False})
@@ -654,7 +688,7 @@ with mode_tab:
             st.markdown('<div class="section-title">Skills you have</div>', unsafe_allow_html=True)
             tags = "".join(f'<span class="tag tag-green">{s}</span>'
                            for s in matched + [s for s in missing if s in learned])
-            st.markdown(f'<div class="tag-wrap">{tags or "<em style=color:#94A3B8>None detected</em>"}</div>',
+            st.markdown(f'<div class="tag-wrap">{tags or "<em style=color:#555555>None detected</em>"}</div>',
                         unsafe_allow_html=True)
     
         with sk2:
@@ -670,10 +704,10 @@ with mode_tab:
     
         # ── Result tabs ───────────────────────────────────────────────────────
         t1, t2, t3, t4, t5, t6, t7, t8, t9 = st.tabs([
-            "📅 Learning Plan", "📚 Resources",
-            "🎤 Interview Prep", "📝 Resume Tips",
-            "🛠 Projects", "🤖 ATS Check", "✉️ Cover Letter",
-            "📄 Resume Builder", "📥 Export",
+            "Learning Plan", "Resources",
+            "Interview Prep", "Resume Tips",
+            "Projects", "ATS Check", "Cover Letter",
+            "Resume Builder", "Export",
         ])
     
         with t1:
@@ -688,35 +722,36 @@ with mode_tab:
                         gantt_skills.append(s)
                         gantt_starts.append(w - 1)
                         gantt_ends.append(w)
-                        gantt_colors.append("#059669" if done_g else "#2563EB")
+                        gantt_colors.append("#FFE000" if done_g else "#222222")
                         gantt_text.append("✓ Done" if done_g else f"Week {w}")
                 if gantt_skills and _PLOTLY_OK:
                     fig_gantt = go.Figure()
                     for i, (skill_g, start, end, color, txt) in enumerate(
                         zip(gantt_skills, gantt_starts, gantt_ends, gantt_colors, gantt_text)
                     ):
+                        txt_color = "#000000" if color == "#FFE000" else "#FFFFFF"
                         fig_gantt.add_trace(go.Bar(
                             x=[end - start], base=[start], y=[skill_g],
                             orientation="h",
-                            marker=dict(color=color, line=dict(width=0)),
+                            marker=dict(color=color, line=dict(color="#000000", width=1)),
                             text=txt, textposition="inside",
-                            textfont={"color": "#E2E8F0", "size": 10},
+                            textfont={"color": txt_color, "size": 10},
                             showlegend=False,
                             hovertemplate=f"<b>{skill_g}</b><br>Week {start+1}<extra></extra>",
                         ))
                     max_week = max(gantt_ends)
                     fig_gantt.update_layout(
                         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                        font={"color": "#C9D1D9"},
+                        font={"color": "#000000"},
                         height=max(200, len(gantt_skills) * 36 + 80),
                         barmode="overlay", bargap=0.3,
                         xaxis=dict(
                             title="Week", range=[0, max_week + 0.2],
                             tickvals=list(range(1, max_week + 1)),
                             ticktext=[f"Wk {i}" for i in range(1, max_week + 1)],
-                            gridcolor="#1E2A3A", color="#8899AA",
+                            gridcolor="#E0E0E0", color="#555555",
                         ),
-                        yaxis=dict(gridcolor="#1E2A3A", color="#C9D1D9"),
+                        yaxis=dict(gridcolor="#E0E0E0", color="#333333"),
                         margin=dict(l=10, r=10, t=10, b=30),
                     )
                     st.plotly_chart(fig_gantt, use_container_width=True, config={"displayModeBar": False})
@@ -841,7 +876,7 @@ with mode_tab:
                     <div class="score-card">
                       <div class="score-label">Keyword Match</div>
                       <div class="score-number {kw_cls}">{kw_score}%</div>
-                      <div class="score-sub" style="color:#94A3B8;">{len(kw_found)} of {len(kw_found)+len(kw_missing)} JD skills</div>
+                      <div class="score-sub" style="color:#555555;">{len(kw_found)} of {len(kw_found)+len(kw_missing)} JD skills</div>
                     </div>""", unsafe_allow_html=True)
                     st.progress(kw_score / 100)
                 with ac3:
@@ -850,32 +885,32 @@ with mode_tab:
                     <div class="score-card">
                       <div class="score-label">Structure Score</div>
                       <div class="score-number {sec_cls}">{sec_score}%</div>
-                      <div class="score-sub" style="color:#94A3B8;">{word_count} words</div>
+                      <div class="score-sub" style="color:#555555;">{word_count} words</div>
                     </div>""", unsafe_allow_html=True)
                     st.progress(sec_score / 100)
     
                 # ATS gauge chart
                 if _PLOTLY_OK:
-                    ats_gauge_color = "#34D399" if ats_score >= 75 else ("#FBBF24" if ats_score >= 50 else "#F87171")
+                    ats_gauge_color = "#FFE000" if ats_score >= 75 else ("#FF6600" if ats_score >= 50 else "#E65000")
                     fig_ats = go.Figure(go.Indicator(
                         mode="gauge+number",
                         value=ats_score,
-                        number={"suffix": "%", "font": {"size": 36, "color": "#E2E8F0"}},
+                        number={"suffix": "%", "font": {"size": 36, "color": "#000000"}},
                         gauge={
-                            "axis": {"range": [0, 100], "tickcolor": "#8899AA",
-                                     "tickfont": {"color": "#8899AA", "size": 10}},
+                            "axis": {"range": [0, 100], "tickcolor": "#555555",
+                                     "tickfont": {"color": "#555555", "size": 10}},
                             "bar": {"color": ats_gauge_color, "thickness": 0.28},
-                            "bgcolor": "#0D1220", "borderwidth": 0,
+                            "bgcolor": "#FFFFFF", "borderwidth": 0,
                             "steps": [
-                                {"range": [0,  50], "color": "#2D0A0A"},
-                                {"range": [50, 75], "color": "#1C1205"},
-                                {"range": [75, 100], "color": "#052E16"},
+                                {"range": [0,  50], "color": "#FFE8CC"},
+                                {"range": [50, 75], "color": "#FFF3CC"},
+                                {"range": [75, 100], "color": "#FFFDE7"},
                             ],
                         },
                     ))
                     fig_ats.update_layout(
                         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                        font={"color": "#E2E8F0"}, height=200,
+                        font={"color": "#000000"}, height=200,
                         margin=dict(l=20, r=20, t=20, b=10),
                     )
                     gc, _ = st.columns([1, 2])
@@ -914,7 +949,11 @@ with mode_tab:
             else:
                 st.markdown("""
                 <div class="empty-state">
-                  <div class="icon">🤖</div>
+                  <div class="icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#000000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="2" y="6" width="20" height="12" rx="2"/><path d="M12 12h.01"/><path d="M17 12h.01"/><path d="M7 12h.01"/>
+                    </svg>
+                  </div>
                   <h3>ATS check not run yet</h3>
                   <p>Click <strong>Run ATS Check</strong> above to analyse your resume.</p>
                 </div>""", unsafe_allow_html=True)
@@ -950,7 +989,7 @@ with mode_tab:
                 dl_col, _ = st.columns([1, 3])
                 with dl_col:
                     st.download_button(
-                        "📄 Download .txt",
+                        "Download .txt",
                         data=edited.encode("utf-8"),
                         file_name="cover_letter.txt",
                         mime="text/plain",
@@ -960,7 +999,11 @@ with mode_tab:
             else:
                 st.markdown("""
                 <div class="empty-state">
-                  <div class="icon">✉️</div>
+                  <div class="icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#000000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                      <rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+                    </svg>
+                  </div>
                   <h3>No cover letter yet</h3>
                   <p>Click <strong>Generate Cover Letter</strong> above to create one.</p>
                 </div>""", unsafe_allow_html=True)
@@ -1032,7 +1075,7 @@ with mode_tab:
                     pdf_bytes = generate_resume_pdf(rd)
                     with dl1:
                         st.download_button(
-                            "📄 Download PDF",
+                            "Download PDF",
                             data=pdf_bytes,
                             file_name="tailored_resume.pdf",
                             mime="application/pdf",
@@ -1044,7 +1087,7 @@ with mode_tab:
                 with dl2:
                     import json as _json2
                     st.download_button(
-                        "📦 Download JSON",
+                        "Download JSON",
                         data=_json2.dumps(rd, indent=2).encode(),
                         file_name="tailored_resume.json",
                         mime="application/json",
@@ -1056,7 +1099,11 @@ with mode_tab:
             else:
                 st.markdown("""
                 <div class="empty-state">
-                  <div class="icon">📄</div>
+                  <div class="icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#000000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>
+                    </svg>
+                  </div>
                   <h3>No resume generated yet</h3>
                   <p>Click <strong>Generate Tailored Resume</strong> above to create a job-specific version of your resume.</p>
                 </div>""", unsafe_allow_html=True)
@@ -1070,7 +1117,7 @@ with mode_tab:
             with dl1:
                 html_report = generate_html_report(report, candidate_name)
                 st.download_button(
-                    "📄 Download HTML Report",
+                    "Download HTML Report",
                     data=html_report.encode("utf-8"),
                     file_name="alignagent_report.html",
                     mime="text/html",
@@ -1080,7 +1127,7 @@ with mode_tab:
     
             with dl2:
                 st.download_button(
-                    "📦 Download JSON Report",
+                    "Download JSON Report",
                     data=generate_json_bytes(report),
                     file_name="alignagent_report.json",
                     mime="application/json",
@@ -1091,7 +1138,11 @@ with mode_tab:
     else:
         st.markdown("""
         <div class="empty-state">
-          <div class="icon">🎯</div>
+          <div class="icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#000000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
+            </svg>
+          </div>
           <h3>Your analysis will appear here</h3>
           <p>Upload a resume, paste or scrape a job description, then hit <strong>Analyse my fit</strong>.</p>
         </div>""", unsafe_allow_html=True)
@@ -1140,9 +1191,9 @@ with compare_tab:
         best = results[0]["_label"]
 
         st.markdown(f"""
-        <div style="background:#0F2A1A;border:1px solid #238636;border-radius:12px;
-                    padding:1rem 1.5rem;margin-bottom:1.5rem;color:#3FB950;font-weight:600;">
-          🏆 Best fit: <strong>{best}</strong> — highest readiness score
+        <div style="background:#FFE000;border:3px solid #000000;border-radius:0;
+                    padding:1rem 1.5rem;margin-bottom:1.5rem;color:#000000;font-weight:800;">
+          Best fit: <strong>{best}</strong> — highest readiness score
         </div>""", unsafe_allow_html=True)
 
         cols = st.columns(len(results), gap="large")
@@ -1159,7 +1210,7 @@ with compare_tab:
                 <div class="compare-card">
                   <div class="compare-title">{label}{crown}</div>
                   <div class="compare-score {score_cls}">{score}%</div>
-                  <div style="color:#94A3B8;font-size:.8rem;margin:.3rem 0;">Readiness</div>
+                  <div style="color:#555555;font-size:.8rem;margin:.3rem 0;">Readiness</div>
                   <div style="margin-top:.75rem;">
                     <span class="tag tag-green" style="margin:2px;">{matched_count} matched</span>
                     <span class="tag tag-red"   style="margin:2px;">{missing_count} gaps</span>
@@ -1179,7 +1230,11 @@ with compare_tab:
     else:
         st.markdown("""
         <div class="empty-state">
-          <div class="icon">⚖️</div>
+          <div class="icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#000000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/>
+            </svg>
+          </div>
           <h3>Compare your fit across multiple jobs</h3>
           <p>Upload your resume and paste up to 3 job descriptions to see which is the best fit.</p>
         </div>""", unsafe_allow_html=True)
